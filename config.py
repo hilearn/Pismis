@@ -1,0 +1,2 @@
+USERNAME = 'ashmat'
+PASSWORD = '789+456+123'
