@@ -85,7 +85,7 @@ def main(args):
 
     if args.plot or args.save is not None:
         print("\nPrepare plot...")
-        plt.figure(figsize=eval(args.size))
+        plt.figure(figsize=args.size)
         plt.imshow(image)
 
         if args.plot:
