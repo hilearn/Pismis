@@ -2,7 +2,7 @@
 Use like:
 
     from get_coordinates import get_corner_coordinates
-    my_coordinates = get_corner_coordinates('T38TLL_B01.jp2'):
+    my_coordinates = get_corner_coordinates('T38TLL_B01.jp2')
 """
 import numpy as np
 from osgeo import gdal
