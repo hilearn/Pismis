@@ -2,14 +2,29 @@ from osgeo import ogr
 from osgeo import gdal
 import numpy as np
 from pyproj import Proj, transform
+import json
+import logging
+logging.debug('import utils')
+
+
+def coordinates_from_geojson(geojson):
+    """
+    Get coordinates from geojson
+    :param geojson: string
+        path o geojson file
+    :return: vertices of the polygon
+    """
+
+    f = json.load(open(geojson, 'r'))
+    return np.array(f['features'][0]['geometry']['coordinates'][0][:-1])
 
 
 def poly_from_list(poly_list):
-    '''
+    """
     Creates Polygon object.
     :param poly_list: list of vertices.
     :return: Polygon object
-    '''
+    """
     ring = ogr.Geometry(ogr.wkbLinearRing)
     for point in poly_list:
         ring.AddPoint_2D(point[0], point[1])
@@ -20,20 +35,20 @@ def poly_from_list(poly_list):
 
 
 def contains(poly_contains, poly):
-    '''
+    """
     Returns True if <poly_contains> contains <poly>
     :param poly_contains: list of lists or nx2 array
         Coordinates of vertices of the polygon (n is number of vertices)
     :param poly: list of lists or nx2 array
         Coordinates of vertices of the polygon (n is number of vertices)
     :return: bool
-    '''
+    """
     poly_contains = poly_from_list(poly_contains)
     poly = poly_from_list(poly)
     return poly_contains.Contains(poly)
 
 
-def _transform_coordinates(coordinates, reverse=False):
+def transform_coordinates(coordinates, reverse=False):
     """
     Transform coordinates from Geojson like to Gdal like
     :param coordinates: coordinates in system epsg:4326.

@@ -5,59 +5,90 @@ Crop image my coordinates. Use like:
 
 'a' is the array of croped image
 """
-import json
-from osgeo import gdal
-from utils import get_corner_coordinates
-from utils import _transform_coordinates
+from osgeo import gdal, osr
+from utils import transform_coordinates
+from utils import coordinates_from_geojson
+import numpy as np
+import logging
 
 
-def crop(selection_geojson, image_name):
+def crop(selection_geojson, image_name, output_file='o.tiff'):
     """
-    Crop image by coordinate masks
+    Crop image by coordinate masks and save geotiff file.
 
-    :param selection_geojson: geojson file name
-    :param image: string like "image.jp2"
-    :return:
+    :param selection_geojson: string, geojson file name
+        contains coordinates for cropping
+    :param image_name: string
+        image file to crop
+    :param output_file: string or None
+        output file name
+    :return: ndarray
+        if output_file is None returns array object
     """
+    logging.debug('cropping ' + image_name)
+    new_coordinates = transform_coordinates(
+        coordinates_from_geojson(selection_geojson))
 
-    selection = json.load(open(selection_geojson))
-    new_coordinates_lat_long = \
-        selection['features'][0]['geometry']['coordinates'][0][:4]
-    new_coordinates = _transform_coordinates(new_coordinates_lat_long)
+    min_x, max_x, min_y, max_y = (new_coordinates[:, 0].min(),
+                                  new_coordinates[:, 0].max(),
+                                  new_coordinates[:, 1].min(),
+                                  new_coordinates[:, 1].max())
 
-    origin_coordinates = get_corner_coordinates(image_name)
-    image_array = gdal.Open(image_name).ReadAsArray()
+    dataset = gdal.Open(image_name)
+    if dataset is None:
+        raise Exception('Could not open ' + image_name)
+    # Getting image dimensions
+    bands = dataset.RasterCount
 
-    if len(image_array.shape) == 3:  # Check is it 3D colored
-                                        # image or 2D channel
-        image_array = image_array.transpose(1, 2, 0)
+    # Getting georeference info
+    transform = dataset.GetGeoTransform()
+    xOrigin = transform[0]
+    yOrigin = transform[3]
+    pixelWidth = transform[1]
+    pixelHeight = -transform[5]
 
-    # Get origin image shapes
-    bottom_origin = origin_coordinates[:, 1].min()
-    top_origin = origin_coordinates[:, 1].max()
+    # Computing Point1(i1,j1), Point2(i2,j2)
+    i1 = int(round((min_x - xOrigin) / pixelWidth))
+    j1 = int(round((yOrigin - max_y) / pixelHeight))
+    i2 = int(round((max_x - xOrigin) / pixelWidth))
+    j2 = int(round((yOrigin - min_y) / pixelHeight))
 
-    left_origin = origin_coordinates[:, 0].min()
-    right_origin = origin_coordinates[:, 0].max()
+    # cropped image size
+    new_cols = (i2 - i1 + 1)
+    new_rows = (j2 - j1 + 1)
+    band_list = []
+    # Read in bands and store all the data in bandList
+    for i in range(bands):
+        band = dataset.GetRasterBand(i + 1)  # 1-based index
+        data = band.ReadAsArray(i1, j1, new_cols, new_rows)
+        band_list.append(data)
 
-    height_origin = abs(top_origin - bottom_origin)
-    width_origin = abs(right_origin - left_origin)
+    new_x = xOrigin + i1 * pixelWidth
+    new_y = yOrigin - j2 * pixelHeight
+    new_transform = (new_x, transform[1], transform[2],
+                     new_y, transform[4], transform[5])
 
-    # Get new image shapes
-    bottom_new = new_coordinates[:, 1].min()
-    top_new = new_coordinates[:, 1].max()
+    if output_file is None:
+        return np.stack(band_list, axis=-1)
 
-    left_new = new_coordinates[:, 0].min()
-    right_new = new_coordinates[:, 0].max()
+    # Create gtif file
+    logging.debug('Creating ' + output_file)
+    driver = gdal.GetDriverByName("GTiff")
+    dst_ds = driver.Create(output_file, new_cols, new_rows,
+                           bands, band.DataType)
 
-    x_1 = (image_array.shape[1] * (left_new - left_origin)
-           / width_origin).astype(int)
-    x_2 = (image_array.shape[1] * (right_new - left_origin)
-           / width_origin).astype(int)
+    # Writing output raster
+    for j in range(bands):
+        data = band_list[j]
+        dst_ds.GetRasterBand(j + 1).WriteArray(data)
 
-    y_1 = (image_array.shape[0] * (top_origin - top_new)
-           / height_origin).astype(int)
-    y_2 = (image_array.shape[0] * (top_origin - bottom_new)
-           / height_origin).astype(int)
-
-    cropped_image_array = image_array[y_1:y_2, x_1:x_2]
-    return cropped_image_array
+    # Setting extension of output raster
+    dst_ds.SetGeoTransform(new_transform)
+    wkt = dataset.GetProjection()
+    # Setting spatial reference of output raster
+    srs = osr.SpatialReference()
+    srs.ImportFromWkt(wkt)
+    dst_ds.SetProjection(srs.ExportToWkt())
+    # Close output raster dataset
+    dataset = None
+    dst_ds = None
