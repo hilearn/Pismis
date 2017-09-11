@@ -21,6 +21,8 @@ def parse_arguments():
                         'date, date format: DD-MM-YYYY', default=None)
     parser.add_argument('-o', '--output', help='output into *.csv file',
                         default=None)
+    parser.add_argument('-s', '--split', type=int,
+                        help='split ids into files.', default=0)
     return parser.parse_args()
 
 
@@ -79,4 +81,17 @@ if __name__ == '__main__':
     print(df[['beginposition', 'size']])
     print('Total size: %0.2f' % size + ' GB')
     if args.output is not None:
-        df.to_csv(args.output)
+        if args.split == 0:
+            df.to_csv(args.output)
+        else:
+            files = [None] * args.split
+            for i, product_id in enumerate(df.index):
+                i_file = i % args.split
+                if files[i_file] is None:
+                    files[i_file] = open(args.output + '.' + str(i_file+1) +
+                                         '.txt', 'w')
+                f = files[i_file]
+                f.write(product_id + '\n')
+            for file in files:
+                if file is not None:
+                    file.close()

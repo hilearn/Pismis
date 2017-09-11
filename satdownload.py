@@ -169,7 +169,7 @@ def satdownload(product_id, geojson, download_path='./downloads/',
 
     # remove unnecessary files
     if remove_trash is True:
-        # os.remove(zipfile_path)
+        os.remove(zipfile_path)
         shutil.rmtree(os.path.join(download_path, product_info['Filename']))
 
     # cropping images
