@@ -6,9 +6,11 @@ named like '...B04.jp2','...B03.jp2','...B02.jp2'
 You can Print or Save image.
 """
 from glob import glob
-from osgeo import gdal
+from osgeo import gdal, osr
 from argparse import ArgumentParser
 import numpy as np
+import os
+import logging
 import matplotlib.pyplot as plt
 
 
@@ -43,6 +45,74 @@ def mix(red_channel, green_channel, blue_channel, bright_limit=3500):
     image = image_to_transpose.transpose(1, 2, 0).astype("uint8")
 
     return image
+
+
+def color_image(directory, r_band, g_band, b_band, suffix='TCI1',
+                bright_limit=3500):
+    """
+    Creates color image from given bands
+    :param directory: str, directory, where are located band files
+    :param r_band: str, suffix of red band
+    :param g_band: str, suffix of green band
+    :param b_band: str, suffix of blue band
+    :param suffix: str, suffix for output file
+    :param bright_limit: Supremum of chanel brightness.
+        Each value in cannel array greater than bright_limit
+        to be assigned bright_limit
+    """
+    red_channel, green_channel, blue_channel = None, None, None
+    dataset = None
+    for file in os.listdir(directory):
+        file_name = os.path.splitext(file)[0]
+        n = file_name[-3:]
+        if n == r_band:
+            print('\tRed band file:   ' + file)
+            dataset = gdal.Open(os.path.join(directory, file))
+            red_channel = dataset.ReadAsArray()
+        if n == g_band:
+            print('\tGreen band file: ' + file)
+            green_channel = gdal.Open(
+                os.path.join(directory, file)).ReadAsArray()
+        if n == b_band:
+            print('\tBlue band file:  ' + file)
+            blue_channel = gdal.Open(
+                os.path.join(directory, file)).ReadAsArray()
+
+    if type(None) in map(type, (red_channel, green_channel, blue_channel)):
+        raise Exception('Not all bands found.' +
+                        str([y for x, y in
+                            zip((red_channel, green_channel, blue_channel),
+                             (r_band, g_band, b_band)) if x is None]))
+
+    if not (red_channel.shape == green_channel.shape == blue_channel.shape):
+        raise Exception('Bands have different resolution: ' +
+                        str((red_channel.shape, green_channel.shape,
+                             blue_channel.shape)))
+
+    image = mix(red_channel, green_channel, blue_channel, bright_limit)
+    output_file = os.path.join(directory, file_name[:-3] + suffix + '.tiff')
+
+    # Create gtif file
+    logging.debug('Creating ' + output_file)
+    print('\tColor file:      ' + os.path.split(output_file)[-1])
+    driver = gdal.GetDriverByName("GTiff")
+    dst_ds = driver.Create(output_file, image.shape[1], image.shape[0],
+                           image.shape[2], gdal.GDT_Byte)
+
+    # Writing output raster
+    for j in range(image.shape[2]):
+        dst_ds.GetRasterBand(j + 1).WriteArray(image[..., j])
+
+    # Setting extension of output raster
+    dst_ds.SetGeoTransform(dataset.GetGeoTransform())
+    wkt = dataset.GetProjection()
+    # Setting spatial reference of output raster
+    srs = osr.SpatialReference()
+    srs.ImportFromWkt(wkt)
+    dst_ds.SetProjection(srs.ExportToWkt())
+    # Close output raster dataset
+    dataset = None
+    dst_ds = None
 
 
 def main(args):

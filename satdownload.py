@@ -118,7 +118,7 @@ def satdownload(product_id, geojson, download_path='./downloads/',
             download_path, product_info['title'] + '.zip')) is True:
         print(product_info['title'] + '.zip' + ' exist.')
     else:
-        satdownload_zip(product_info['id'], download_path)
+        satdownload_zip(product_info['id'], download_path, api=api)
     # skip extraction part
     if download_only is True:
         return

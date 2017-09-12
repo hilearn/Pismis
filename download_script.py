@@ -2,7 +2,9 @@ from argparse import ArgumentParser
 import os
 import logging
 import csv
+from config import ACCOUNTS
 from satdownload import satdownload
+from sentinelsat import SentinelAPI
 
 DOWNLOAD_PATH = './downloads/'
 
@@ -20,12 +22,26 @@ def parse_arguments():
                                    'file.geojson ids.txt')
     parser.add_argument('geojson', help='geojson file for fotprint')
     parser.add_argument('ids', help='txt or csv file for product ids')
+    parser.add_argument('--username', default=None)
+    parser.add_argument('--password', default=None)
+    parser.add_argument('--user', type=int,
+                        help='user index from config file', default=0)
     return parser.parse_args()
 
 
 if __name__ == '__main__':
     args = parse_arguments()
-    os.path.abspath(os.path.join('./', args.geojson))
+
+    username, password = ACCOUNTS[args.user
+                                  if args.user in range(len(ACCOUNTS))
+                                  else 0]
+    if args.username is not None and args.password is not None:
+        username, password = args.username, args.password
+
+    api = SentinelAPI(username, password, 'https://scihub.copernicus.eu/dhus')
+    print('Logging in as:')
+    print('  username: ' + username)
+    print('  password: ' + password)
 
     product_ids = []
     if os.path.splitext(args.ids)[1] == '.csv':
@@ -46,9 +62,9 @@ if __name__ == '__main__':
         try:
             logging.debug('Processing product-id: ' + product_id)
             satdownload(product_id, args.geojson, DOWNLOAD_PATH,
-                        remove_trash=True)
+                        remove_trash=True, api=api)
         except Exception as e:
             print('!!! Problem with product({})'.format(product_id))
-            print(e.message)
+            print(e)
             logging.error('Problem with product({})'.format(product_id))
-            logging.error(e.message)
+            logging.error(e)
