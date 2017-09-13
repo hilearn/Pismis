@@ -2,6 +2,9 @@ from mix import color_image
 import os
 import shutil
 from argparse import ArgumentParser
+from datetime import datetime
+import time
+import json
 
 
 def parse_arguments():
@@ -36,6 +39,15 @@ def color_images(directory, bright_limit=3500):
                 print('Error: ' + str(e))
 
 
+def from_timestamp(timestamp):
+    """
+    Converts 13 digit timestamp to datetime object
+    :param timestamp: int
+    :return: datetime
+    """
+    return datetime.fromtimestamp(time.mktime(time.gmtime(timestamp/1000.)))
+
+
 def collect_images(search_directory, target='./colored'):
     """
     Search colored images in <search_directory> and copy them
@@ -45,9 +57,18 @@ def collect_images(search_directory, target='./colored'):
     """
     for root, dirs, files in os.walk(search_directory):
         for file in files:
-            if 'TCI' in file:
-                new_file = '.'.join(
-                    os.path.normpath(root).split(os.sep)[-2:] + ['tiff'])
+            if 'TCI1' in file:
+                file_hint = ' '.join(os.path.normpath(root).split(os.sep)[-2:])
+                product_dir = os.path.split(os.path.normpath(root))[0]
+
+                # open information about product
+                info = json.load(open(os.path.join(product_dir,
+                                                   'info.json'), 'r'))
+
+                sensing_start = from_timestamp(info['Sensing start'])
+
+                new_file = '{:%Y-%m-%d %H:%M} '.format(sensing_start) + \
+                           file_hint + '.tiff'
 
                 shutil.copy(os.path.join(root, file),
                             os.path.join(target, new_file))

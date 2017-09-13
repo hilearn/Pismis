@@ -12,6 +12,7 @@ import numpy as np
 import os
 import logging
 import matplotlib.pyplot as plt
+from PIL import Image
 
 
 def brightness_limitization(channel, bright_limit=3500):
@@ -19,6 +20,23 @@ def brightness_limitization(channel, bright_limit=3500):
     channel[channel > bright_limit] = bright_limit
     channel = channel * 255.0 / bright_limit
     return channel
+
+
+def resize_band(image, height, width):
+    """
+    Returns a resized copy of image.
+    :param image: 2-dimensional array
+    :param height: height in pixels
+    :param width: width in pixels
+    :return: 2-dimensional array
+    """
+    if image.shape == (height, width):
+        print('A')
+        return image
+    img = Image.fromarray(image)
+    img = img.resize((width, height))
+    return np.array(img.getdata(),
+                    np.uint8).reshape(img.size[1], img.size[0])
 
 
 def mix(red_channel, green_channel, blue_channel, bright_limit=3500):
@@ -85,9 +103,17 @@ def color_image(directory, r_band, g_band, b_band, suffix='TCI1',
                              (r_band, g_band, b_band)) if x is None]))
 
     if not (red_channel.shape == green_channel.shape == blue_channel.shape):
-        raise Exception('Bands have different resolution: ' +
-                        str((red_channel.shape, green_channel.shape,
-                             blue_channel.shape)))
+        print('Bands have different resolution.' +
+              str((red_channel.shape, green_channel.shape,
+                   blue_channel.shape)))
+        resolution = max(red_channel.shape, green_channel.shape,
+                         blue_channel.shape)
+        red_channel = resize_band(red_channel,
+                                  resolution[0], resolution[1])
+        green_channel = resize_band(green_channel,
+                                    resolution[0], resolution[1])
+        blue_channel = resize_band(blue_channel,
+                                   resolution[0], resolution[1])
 
     image = mix(red_channel, green_channel, blue_channel, bright_limit)
     output_file = os.path.join(directory, file_name[:-3] + suffix + '.tiff')
@@ -116,9 +142,7 @@ def color_image(directory, r_band, g_band, b_band, suffix='TCI1',
 
 
 def main(args):
-
     image_names = glob("{}/*.jp2".format(args.file))
-
     there_is_colored_file = False
     print("Search colored image...")
     for name in image_names:
