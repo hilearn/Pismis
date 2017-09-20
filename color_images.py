@@ -1,15 +1,16 @@
-from mix import color_image
+from mix import color_image, brightness_limitization
 import os
 import shutil
 from argparse import ArgumentParser
 from datetime import datetime
 import time
 import json
+from utils import change_datatype
 
 
 def parse_arguments():
     parser = ArgumentParser(description='Create colored images and collect'
-                            'into folder.',
+                                        'into folder.',
                             epilog='python color_images.py ./downloads')
     parser.add_argument('directory', help='directory for images.')
 
@@ -30,13 +31,39 @@ def color_images(directory, bright_limit=3500):
     :param directory: str, directory, where to look
     :param bright_limit: int, Supremum of chanel brightness.
     """
-    for d in os.walk(directory):
-        if len(d[1]) == 0:
-            print('Coloring ' + d[0] + '...')
-            try:
-                color_image(d[0], 'B04', 'B03', 'B02', 'TCI1', bright_limit)
-            except Exception as e:
-                print('Error: ' + str(e))
+    for root, dirs, files in os.walk(directory):
+        if len(dirs) == 0:
+            product_dir = os.path.split(os.path.normpath(root))[0]
+
+            # open information about product
+            info = json.load(open(os.path.join(product_dir,
+                                               'info.json'), 'r'))
+            sentinel = info['Satellite']
+            if sentinel == 'Sentinel-2':
+                print('Coloring ' + root + '...')
+                try:
+                    color_image(root, 'B04', 'B03', 'B02', 'TCI1',
+                                bright_limit)
+                except Exception as e:
+                    print('Error: ' + str(e))
+            elif sentinel == 'Sentinel-1':
+                print('Changing DType to uint8 ' + root + '...')
+                for file in files:
+                    if 'uint8' in file:
+                        continue
+
+                    new_file = os.path.splitext(file)[0] + '_uint8' + \
+                        os.path.splitext(file)[1]
+                    try:
+                        change_datatype(os.path.join(root, file),
+                                        os.path.join(root, new_file),
+                                        processor=lambda
+                                        x: brightness_limitization(x, 255))
+                        print('\tuint8 file:  ' + new_file)
+                    except Exception as e:
+                        print('Error: ' + str(e))
+            else:
+                print('Unknown satellite')
 
 
 def from_timestamp(timestamp):
@@ -45,7 +72,7 @@ def from_timestamp(timestamp):
     :param timestamp: int
     :return: datetime
     """
-    return datetime.fromtimestamp(time.mktime(time.gmtime(timestamp/1000.)))
+    return datetime.fromtimestamp(time.mktime(time.gmtime(timestamp / 1000.)))
 
 
 def collect_images(search_directory, target='./colored'):
@@ -57,8 +84,9 @@ def collect_images(search_directory, target='./colored'):
     """
     for root, dirs, files in os.walk(search_directory):
         for file in files:
-            if 'TCI1' in file:
-                file_hint = ' '.join(os.path.normpath(root).split(os.sep)[-2:])
+            if 'TCI1' in file or 'uint8' in file:
+                file_hint = ' '.join([os.path.splitext(file)[0]] +
+                                     os.path.normpath(root).split(os.sep)[-2:])
                 product_dir = os.path.split(os.path.normpath(root))[0]
 
                 # open information about product
@@ -67,8 +95,9 @@ def collect_images(search_directory, target='./colored'):
 
                 sensing_start = from_timestamp(info['Sensing start'])
 
-                new_file = '{:%Y-%m-%d %H:%M} '.format(sensing_start) + \
-                           file_hint + '.tiff'
+                new_file = info['Satellite'] + \
+                    ' {:%Y-%m-%d %H:%M} '.format(sensing_start) + \
+                    file_hint + '.tiff'
 
                 shutil.copy(os.path.join(root, file),
                             os.path.join(target, new_file))

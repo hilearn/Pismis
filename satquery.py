@@ -23,6 +23,9 @@ def parse_arguments():
                         default=None)
     parser.add_argument('-s', '--split', type=int,
                         help='split ids into files.', default=0)
+    parser.add_argument('-p', '--platform', help="Platform name for query"
+                                                 " (e.g. 'Sentinel-2')",
+                        default=None)
     return parser.parse_args()
 
 
@@ -30,7 +33,7 @@ def parse_date(date):
     return datetime.strptime(date, "%d-%m-%Y")
 
 
-def satquery(geojson, date_from=None, date_to=None):
+def satquery(geojson, date_from=None, date_to=None, platform=None):
     """
     Args:
         geojson: str
@@ -48,10 +51,12 @@ def satquery(geojson, date_from=None, date_to=None):
     api = SentinelAPI(USERNAME, PASSWORD, 'https://scihub.copernicus.eu/dhus')
 
     footprint = geojson_to_wkt(read_geojson(geojson), decimals=6)
+    kwargs = dict()
+    if platform is not None:
+        kwargs['platformname'] = platform
     products = api.query(footprint, date=(date_from, date_to),
-                         area_relation='Contains', platformname='Sentinel-2')
+                         area_relation='Contains', **kwargs)
     df = api.to_dataframe(products)
-
     return df.sort_values(by='beginposition')
 
 
@@ -69,7 +74,10 @@ if __name__ == '__main__':
     else:
         date_to = parse_date(getattr(args, 'to'))
 
-    df = satquery(args.geojson, date_from, date_to)
+    platform = args.platform
+    platform = platform if platform in ['Sentinel-1', 'Sentinel-2'] else None
+
+    df = satquery(args.geojson, date_from, date_to, platform)
 
     size = 0
     for x in df['size']:

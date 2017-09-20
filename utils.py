@@ -1,4 +1,4 @@
-from osgeo import ogr
+from osgeo import ogr, osr
 from osgeo import gdal
 import numpy as np
 from pyproj import Proj, transform
@@ -48,17 +48,18 @@ def contains(poly_contains, poly):
     return poly_contains.Contains(poly)
 
 
-def transform_coordinates(coordinates, reverse=False):
+def transform_coordinates(coordinates, in_system='epsg:4326',
+                          out_system='epsg:32638'):
     """
     Transform coordinates from Geojson like to Gdal like
-    :param coordinates: coordinates in system epsg:4326.
+    :param coordinates: coordinates in input system.
         Common lat.long
-    :return: coordinates in system epsg:32638
+    :param in_system: input coordinate system, default epsg:4326
+    :param out_system: output coordinate system, default epsg:32638
+    :return: coordinates in output system
     """
-    inProj = Proj(init='epsg:4326')
-    outProj = Proj(init='epsg:32638')
-    if reverse is True:
-        inProj, outProj = outProj, inProj
+    inProj = Proj(init=in_system)
+    outProj = Proj(init=out_system)
 
     new_coordinates = []
     for coordinate in coordinates:
@@ -97,3 +98,39 @@ def get_corner_coordinates(image_name):
     ext = _get_extend(gt, cols, rows)
 
     return np.array(ext)
+
+
+def change_datatype(input_file, output_file=None, processor=lambda x: x,
+                    output_type=gdal.GDT_Byte):
+
+    if output_file is None:
+        output_file = input_file
+
+    dataset = gdal.Open(input_file)
+    transform = dataset.GetGeoTransform()
+
+    band_list = []
+    for i in range(dataset.RasterCount):
+        band = dataset.GetRasterBand(i + 1)  # 1-based index
+        data = processor(band.ReadAsArray())
+        band_list.append(data)
+
+    driver = gdal.GetDriverByName("GTiff")
+    dst_ds = driver.Create(output_file, dataset.RasterXSize,
+                           dataset.RasterYSize,
+                           len(band_list), output_type)
+
+    # Writing output raster
+    for j in range(len(band_list)):
+        dst_ds.GetRasterBand(j + 1).WriteArray(band_list[j])
+
+    # Setting extension of output raster
+    dst_ds.SetGeoTransform(transform)
+    wkt = dataset.GetProjection()
+    # Setting spatial reference of output raster
+    srs = osr.SpatialReference()
+    srs.ImportFromWkt(wkt)
+    dst_ds.SetProjection(srs.ExportToWkt())
+    # Close output raster dataset
+    dataset = None
+    dst_ds = None

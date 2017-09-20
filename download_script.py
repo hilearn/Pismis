@@ -54,6 +54,8 @@ if __name__ == '__main__':
         with open(args.ids, 'r') as txtfile:
             for line in txtfile.read().splitlines():
                 product_ids.append(line)
+    else:
+        print('Unknown file for product ids.')
 
     print('all products...')
     print('\n'.join(product_ids))

@@ -17,6 +17,7 @@ from utils import get_corner_coordinates
 from utils import coordinates_from_geojson
 from utils import transform_coordinates
 import logging
+from osgeo import gdal
 
 
 def parse_arguments():
@@ -30,6 +31,8 @@ def parse_arguments():
     parser.add_argument('--download',
                         help="Download only (Do not extract)",
                         action='store_true')
+    parser.add_argument('-g', '--geojson',
+                        help="geojson file for cropping", default=None)
 
     return parser.parse_args()
 
@@ -45,24 +48,25 @@ def satdownload_zip(product_id, directory='./', api=None):
         print('Wrong product id.')
 
 
-def process_tail(tile_dir, geojson, remove_trash=False):
+def process_tail(tile_dir, selection, remove_trash=False):
     """
     Crops images in tile_dir folder.
     :param tile_dir: str
         path to directory
-    :param geojson: str
-        cropping area
+    :param selection: array
+        contains coordinates for cropping
     :param remove_trash: Bool
     """
+    # selection = transform_coordinates(coordinates_from_geojson(geojson))
     for image_name in os.listdir(tile_dir):
         image_path = os.path.join(tile_dir, image_name)
         if contains(get_corner_coordinates(image_path),
-                    transform_coordinates(
-                        coordinates_from_geojson(geojson))) is True:
+                    selection) is True:
 
-            output_file_name = os.path.splitext(image_name)[0] + '.tiff'
+            output_file_name = 'c' + os.path.splitext(image_name)[0] + '.tiff'
             # print('\t' + output_file_name)
-            crop(geojson, image_path, os.path.join(tile_dir, output_file_name))
+            crop(selection, image_path,
+                 os.path.join(tile_dir, output_file_name))
         else:
             print('\t' + 'does not contain your selection')
             logging.info(tile_dir + ' does not contain selection')
@@ -106,6 +110,8 @@ def satdownload(product_id, geojson, download_path='./downloads/',
     # query product information
     product_info = api.get_product_odata(product_id, full=True)
 
+    sentinel = product_info['Satellite']
+
     # directory for images only
     target_directory = os.path.join(download_path, product_info['title'])
 
@@ -138,27 +144,53 @@ def satdownload(product_id, geojson, download_path='./downloads/',
         shutil.rmtree(target_directory)
     os.mkdir(target_directory)
 
-    # product can contain many tails (located in ./GRANULE/)
-    granule = os.path.join(download_path, product_info['Filename'], 'GRANULE')
-    for i, tail_name in enumerate(os.listdir(granule)):
-        print('\ttail name: ' + tail_name)
-        tail_folder_name = 'tail.{}'.format(i)
+    selection = transform_coordinates(coordinates_from_geojson(geojson))
+
+    if sentinel == 'Sentinel-2':
+        # product can contain many tails (located in ./GRANULE/)
+        granule = os.path.join(download_path, product_info['Filename'],
+                               'GRANULE')
+        for i, tail_name in enumerate(os.listdir(granule)):
+            print('\ttail name: ' + tail_name)
+            tail_folder_name = 'tail.{}'.format(i)
+            os.mkdir(os.path.join(target_directory, tail_folder_name))
+
+            # image directories are different for different product types
+            image_dir = os.path.join(granule, tail_name, 'IMG_DATA')
+            if product_info['Product type'] == 'S2MSI2Ap':
+                image_dir = os.path.join(image_dir, 'R10m')
+
+            # move bands into target directory
+            for image in os.listdir(image_dir):
+                image_prime = image
+                if product_info['Product type'] == 'S2MSI2Ap':
+                    image_prime = image_prime[4:-8] + '.jp2'
+                os.rename(os.path.join(image_dir, image),
+                          os.path.join(target_directory,
+                                       tail_folder_name, image_prime))
+
+    elif sentinel == 'Sentinel-1':
+        # shift selection for sentinel-1 products
+        dx, dy = 130.54544882194287, 20.162166196209284
+        selection[:, 0] = selection[:, 0] + dx
+        selection[:, 1] = selection[:, 1] - dy
+
+        # create tail folder
+        tail_folder_name = 'tail.{}'.format(0)
         os.mkdir(os.path.join(target_directory, tail_folder_name))
 
         # image directories are different for different product types
-        image_dir = os.path.join(granule, tail_name, 'IMG_DATA')
-        if product_info['Product type'] == 'S2MSI2Ap':
-            image_dir = os.path.join(image_dir, 'R10m')
+        image_dir = os.path.join(download_path, product_info['Filename'],
+                                 'measurement')
 
         # move bands into target directory
         for image in os.listdir(image_dir):
-            image_prime = image
-            if product_info['Product type'] == 'S2MSI2Ap':
-                image_prime = image_prime[4:-8] + '.jp2'
-
-            os.rename(os.path.join(image_dir, image),
-                      os.path.join(target_directory,
-                                   tail_folder_name, image_prime))
+            image_path = os.path.join(image_dir, image)
+            gdal.Warp(image_path, gdal.Open(image_path), dstSRS='EPSG:32638')
+            os.rename(image_path, os.path.join(target_directory,
+                      tail_folder_name, image))
+    else:
+        print('Unknown satellite')
 
     # save info file
     product_info_series = pandas.Series(product_info)
@@ -178,7 +210,7 @@ def satdownload(product_id, geojson, download_path='./downloads/',
         if os.path.isdir(os.path.join(target_directory, tail_name)) is False:
             continue
         print('\tprocessing ' + tail_name + ' ...')
-        process_tail(os.path.join(target_directory, tail_name), geojson,
+        process_tail(os.path.join(target_directory, tail_name), selection,
                      remove_trash=remove_trash)
     print('\n\n')
 
@@ -188,22 +220,23 @@ if __name__ == '__main__':
     args = parse_arguments()
     ids = args.ids
     download_path = os.path.abspath(os.path.join('./', args.directory))
+    geojson = args.geojson
 
     if os.path.splitext(ids)[1] == '.csv':
         with open(ids, 'r') as csvfile:
             csvfile.readline()
             for line in csv.reader(csvfile, delimiter=','):
                 product_id = line[0]
-                satdownload(product_id, download_path, api=api,
+                satdownload(product_id, geojson, download_path, api=api,
                             download_only=args.download)
 
     elif os.path.splitext(ids)[1] == '.txt':
         with open(ids, 'r') as txtfile:
             for line in txtfile.read().splitlines():
                 product_id = line
-                satdownload(product_id, download_path, api=api,
+                satdownload(product_id, geojson, download_path, api=api,
                             download_only=args.download)
     else:
         product_id = ids
-        satdownload(product_id, download_path, api=api,
+        satdownload(product_id, geojson, download_path, api=api,
                     download_only=args.download)

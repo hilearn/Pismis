@@ -6,17 +6,15 @@ Crop image my coordinates. Use like:
 'a' is the array of croped image
 """
 from osgeo import gdal, osr
-from utils import transform_coordinates
-from utils import coordinates_from_geojson
 import numpy as np
 import logging
 
 
-def crop(selection_geojson, image_name, output_file='o.tiff'):
+def crop(selection, image_name, output_file='o.tiff'):
     """
     Crop image by coordinate masks and save geotiff file.
 
-    :param selection_geojson: string, geojson file name
+    :param selection: array
         contains coordinates for cropping
     :param image_name: string
         image file to crop
@@ -26,13 +24,11 @@ def crop(selection_geojson, image_name, output_file='o.tiff'):
         if output_file is None returns array object
     """
     logging.debug('cropping ' + image_name)
-    new_coordinates = transform_coordinates(
-        coordinates_from_geojson(selection_geojson))
 
-    min_x, max_x, min_y, max_y = (new_coordinates[:, 0].min(),
-                                  new_coordinates[:, 0].max(),
-                                  new_coordinates[:, 1].min(),
-                                  new_coordinates[:, 1].max())
+    min_x, max_x, min_y, max_y = (selection[:, 0].min(),
+                                  selection[:, 0].max(),
+                                  selection[:, 1].min(),
+                                  selection[:, 1].max())
 
     dataset = gdal.Open(image_name)
     if dataset is None:
@@ -64,7 +60,7 @@ def crop(selection_geojson, image_name, output_file='o.tiff'):
         band_list.append(data)
 
     new_x = xOrigin + i1 * pixelWidth
-    new_y = yOrigin - j2 * pixelHeight
+    new_y = yOrigin - j1 * pixelHeight
     new_transform = (new_x, transform[1], transform[2],
                      new_y, transform[4], transform[5])
 
