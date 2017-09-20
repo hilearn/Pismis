@@ -12,7 +12,7 @@ from config import USERNAME, PASSWORD
 def parse_arguments():
     parser = ArgumentParser(description='Query products for given footprint '
                                         'and time filter',
-                            epilog='example: ppython satquery.py'
+                            epilog='example: python satquery.py'
                                    ' ijevan.geojson -o q -p Sentinel-1'
                                    ' --shuffle -s 6 -f 01-08-2017')
     parser.add_argument('geojson', help='geojson file for fotprint')
