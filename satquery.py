@@ -1,7 +1,7 @@
 """
 Query products for given footprint and time filter'
 """
-
+import numpy as np
 from sentinelsat import SentinelAPI, read_geojson, geojson_to_wkt
 from datetime import datetime
 import os
@@ -12,8 +12,9 @@ from config import USERNAME, PASSWORD
 def parse_arguments():
     parser = ArgumentParser(description='Query products for given footprint '
                                         'and time filter',
-                            epilog='example: python satquery.py '
-                                   'example.geojson -f 01-08-2017 -o o.csv')
+                            epilog='example: ppython satquery.py'
+                                   ' ijevan.geojson -o q -p Sentinel-1'
+                                   ' --shuffle -s 6 -f 01-08-2017')
     parser.add_argument('geojson', help='geojson file for fotprint')
     parser.add_argument('-f', '--from', help='query products starting from'
                         'this date, date format: DD-MM-YYYY', default=None)
@@ -26,6 +27,9 @@ def parse_arguments():
     parser.add_argument('-p', '--platform', help="Platform name for query"
                                                  " (e.g. 'Sentinel-2')",
                         default=None)
+    parser.add_argument('--shuffle', help='Shuffle product ids.',
+                        action='store_true')
+
     return parser.parse_args()
 
 
@@ -86,6 +90,11 @@ if __name__ == '__main__':
             size += val
         elif x[-2:] == 'MB':
             size += val / 1024
+
+    if args.shuffle is True:
+        print('Shuffle product ids...')
+        df = df.iloc[np.random.permutation(len(df))]
+
     print(df[['beginposition', 'size']])
     print('Total size: %0.2f' % size + ' GB')
     if args.output is not None:
