@@ -15,3 +15,11 @@ Then activate the created virutalenv
 ```
 source .venv/current/bin/activate
 ```
+
+## Running tests
+
+We run tests nose
+
+```
+make test
+```

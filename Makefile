@@ -15,3 +15,6 @@ update_venv: requirements.txt ${venv}
 	@ln -s $(hash) .venv/current
 	@echo Success, to activate the development environment, run:
 	@echo "\tsource .venv/current/bin/activate"
+
+test:
+	python3 -m nose -v tests/*
