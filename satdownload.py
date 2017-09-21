@@ -58,11 +58,12 @@ def process_tail(tile_dir, selection, remove_trash=False):
     :param remove_trash: Bool
     """
     # selection = transform_coordinates(coordinates_from_geojson(geojson))
+    does_not_contain = True
     for image_name in os.listdir(tile_dir):
         image_path = os.path.join(tile_dir, image_name)
         if contains(get_corner_coordinates(image_path),
                     selection) is True:
-
+            does_not_contain = False
             output_file_name = 'c' + os.path.splitext(image_name)[0] + '.tiff'
             # print('\t' + output_file_name)
             crop(selection, image_path,
@@ -70,13 +71,13 @@ def process_tail(tile_dir, selection, remove_trash=False):
         else:
             print('\t' + 'does not contain your selection')
             logging.info(tile_dir + ' does not contain selection')
-            if remove_trash is True:
-                logging.info('removing ' + tile_dir)
-                shutil.rmtree(tile_dir)
-            break
         if remove_trash is True:
             logging.info('removing ' + image_path)
             os.remove(image_path)
+
+    if does_not_contain and remove_trash:
+        logging.info('removing ' + tile_dir)
+        shutil.rmtree(tile_dir)
 
 
 def satdownload(product_id, geojson, download_path='./downloads/',
