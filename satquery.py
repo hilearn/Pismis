@@ -25,8 +25,9 @@ def parse_arguments():
     parser.add_argument('-s', '--split', type=int,
                         help='split ids into files.', default=0)
     parser.add_argument('-p', '--platform', help="Platform name for query"
-                                                 " (e.g. 'Sentinel-2')",
-                        default=None)
+                                                 " (default 'Sentinel-2')",
+                        choices=['Sentinel-1', 'Sentinel-2'],
+                        default='Sentinel-2')
     parser.add_argument('--shuffle', help='Shuffle product ids.',
                         action='store_true')
 
@@ -37,7 +38,7 @@ def parse_date(date):
     return datetime.strptime(date, "%d-%m-%Y")
 
 
-def satquery(geojson, date_from=None, date_to=None, platform=None):
+def satquery(geojson, date_from=None, date_to=None, platform='Sentinel-2'):
     """
     Args:
         geojson: str
@@ -46,6 +47,8 @@ def satquery(geojson, date_from=None, date_to=None, platform=None):
         date_to: datetime, optional
             The time interval filter based on the
             Sensing Date of the products
+        platform: string
+            'Sentinel-1' or 'Sentinel-2'
 
     Returns:
         Return the products from a query response as a Pandas DataFrame
@@ -56,8 +59,11 @@ def satquery(geojson, date_from=None, date_to=None, platform=None):
 
     footprint = geojson_to_wkt(read_geojson(geojson), decimals=6)
     kwargs = dict()
-    if platform is not None:
-        kwargs['platformname'] = platform
+    kwargs['platformname'] = platform
+    if platform == 'Sentinel-1':
+        # Level-1 Ground Range Detected (GRD) products
+        kwargs['producttype'] = 'GRD'
+
     products = api.query(footprint, date=(date_from, date_to),
                          area_relation='Contains', **kwargs)
     df = api.to_dataframe(products)
@@ -78,11 +84,9 @@ if __name__ == '__main__':
     else:
         date_to = parse_date(getattr(args, 'to'))
 
-    platform = args.platform
-    platform = platform if platform in ['Sentinel-1', 'Sentinel-2'] else None
+    df = satquery(args.geojson, date_from, date_to, args.platform)
 
-    df = satquery(args.geojson, date_from, date_to, platform)
-
+    # Estimate download size
     size = 0
     for x in df['size']:
         val = float(x[:-3])

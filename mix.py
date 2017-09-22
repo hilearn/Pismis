@@ -86,6 +86,8 @@ def color_image(directory, r_band, g_band, b_band, suffix='TCI1',
         if n == r_band:
             print('\tRed band file:   ' + file)
             dataset = gdal.Open(os.path.join(directory, file))
+            output_file = os.path.join(directory,
+                                       file_name[:-3] + suffix + '.tiff')
             red_channel = dataset.ReadAsArray()
         if n == g_band:
             print('\tGreen band file: ' + file)
@@ -116,7 +118,6 @@ def color_image(directory, r_band, g_band, b_band, suffix='TCI1',
                                    resolution[0], resolution[1])
 
     image = mix(red_channel, green_channel, blue_channel, bright_limit)
-    output_file = os.path.join(directory, file_name[:-3] + suffix + '.tiff')
 
     # Create gtif file
     logging.debug('Creating ' + output_file)

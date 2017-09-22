@@ -33,37 +33,35 @@ def color_images(directory, bright_limit=3500):
     """
     for root, dirs, files in os.walk(directory):
         if len(dirs) == 0:
-            product_dir = os.path.split(os.path.normpath(root))[0]
+            try:
+                product_dir = os.path.split(os.path.normpath(root))[0]
 
-            # open information about product
-            info = json.load(open(os.path.join(product_dir,
-                                               'info.json'), 'r'))
-            sentinel = info['Satellite']
-            if sentinel == 'Sentinel-2':
-                print('Coloring ' + root + '...')
-                try:
+                # open information about product
+                info = json.load(open(os.path.join(product_dir,
+                                                   'info.json'), 'r'))
+                sentinel = info['Satellite']
+                if sentinel == 'Sentinel-2':
+                    print('Coloring ' + root + '...')
                     color_image(root, 'B04', 'B03', 'B02', 'TCI1',
                                 bright_limit)
-                except Exception as e:
-                    print('Error: ' + str(e))
-            elif sentinel == 'Sentinel-1':
-                print('Changing DType to uint8 ' + root + '...')
-                for file in files:
-                    if 'uint8' in file:
-                        continue
+                elif sentinel == 'Sentinel-1':
+                    print('Changing DType to uint8 ' + root + '...')
+                    for file in files:
+                        if 'uint8' in file:
+                            continue
 
-                    new_file = os.path.splitext(file)[0] + '_uint8' + \
-                        os.path.splitext(file)[1]
-                    try:
+                        new_file = os.path.splitext(file)[0] + '_uint8' + \
+                            os.path.splitext(file)[1]
                         change_datatype(os.path.join(root, file),
                                         os.path.join(root, new_file),
                                         processor=lambda
                                         x: brightness_limitization(x, 255))
                         print('\tuint8 file:  ' + new_file)
-                    except Exception as e:
-                        print('Error: ' + str(e))
-            else:
-                print('Unknown satellite')
+                else:
+                    print('Unknown satellite')
+
+            except Exception as e:
+                print('Error: ' + 'Path: ' + root + '\n' + str(e))
 
 
 def from_timestamp(timestamp):
