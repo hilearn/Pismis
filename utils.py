@@ -1,10 +1,29 @@
-from osgeo import ogr, osr
-from osgeo import gdal
+from osgeo import gdal, ogr, osr
 import numpy as np
 from pyproj import Proj, transform
 import json
 import logging
+from glob import glob
+import os
+
 logging.debug('import utils')
+
+
+def band_name(directory, band):
+    """
+    Get band name we need from given <directory>
+
+    :param directory: The directory containing bands (...B04.tiff,
+                      ...B03.tiff, ... )
+    :param band: The UNIQUE string band name should contain e.g. "B04",
+                 "TCI" e.c.
+    :return: Full band name (including directory)
+    """
+    names = glob("{}/*.tiff".format(os.path.normpath(directory)))
+    for name in names:
+        if name.endswith(band + ".tiff"):
+            return name
+    return None
 
 
 def coordinates_from_geojson(geojson):
