@@ -9,6 +9,7 @@ Get cloud and clowd shadows mask. Use it like
 You can also save "cloud_mask.pkl" file in the same directory alongside bands.
 """
 from utils import band_name
+from utils import Bands
 from osgeo import gdal
 import pickle as pkl
 
@@ -26,9 +27,9 @@ def cloud_mask(bands_directory, cloud_threshold=1500,
     :return: 2D array with 1s and 0s, where 0s corespond to cloudy pixels
             1s - to cloud-free pixels.
     """
-    red_band_name = band_name(bands_directory, "B04")
-    green_band_name = band_name(bands_directory, "B03")
-    blue_band_name = band_name(bands_directory, "B02")
+    red_band_name = band_name(bands_directory, Bands.RED)
+    green_band_name = band_name(bands_directory, Bands.GREEN)
+    blue_band_name = band_name(bands_directory, Bands.BLUE)
 
     red_band = gdal.Open(red_band_name).ReadAsArray()
     green_band = gdal.Open(green_band_name).ReadAsArray()
@@ -63,7 +64,6 @@ def is_useful(bands_directory_name, useful_part_we_need=0.1):
 
     # This is 2D array of 0s and 1s where 1s indicate useful pixels
     useful_part_ones = cloud_mask(bands_directory_name)
-
-    enough_clear_area = (useful_part_ones.sum()/useful_part_ones.size >
+    enough_clear_area = (1. * useful_part_ones.sum() / useful_part_ones.size >
                          useful_part_we_need)
-    return enough_clear_area
+    return bool(enough_clear_area)

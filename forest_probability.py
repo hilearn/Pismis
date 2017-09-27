@@ -4,8 +4,13 @@ import numpy as np
 import os
 import matplotlib.pyplot as plt
 from scipy.stats import multivariate_normal
-from cloud_mask import get_cloud_mask_path
+from cloud_mask import cloud_mask
 from sklearn import mixture
+import pandas as pd
+import json
+from utils import timestamp_to_datetime
+from utils import band_name
+from utils import Bands
 
 
 def multi_normal_pdf(x, mean, covariance):
@@ -67,14 +72,48 @@ def NDVI(path):
     :param path: str, path to product.
     :return: array, NDVI
     """
-    f_NIR = os.path.join(path,
-                         [x for x in os.listdir(path) if x[-8:-5] == 'B08'][0])
-    f_RED = os.path.join(path,
-                         [x for x in os.listdir(path) if x[-8:-5] == 'B04'][0])
-    NIR = gdal.Open(f_NIR).ReadAsArray()
-    RED = gdal.Open(f_RED).ReadAsArray()
+    NIR = gdal.Open(band_name(path, Bands.NIR)).ReadAsArray()
+    RED = gdal.Open(band_name(path, Bands.RED)).ReadAsArray()
     return (NIR.astype('float') - RED.astype('float')) / (
         NIR.astype('float') + RED.astype('float'))
+
+
+def forest_probabilities_TS(data):
+    """
+    Return time series for every pixel.
+    :param data: str, path to processed data.
+    :return: Pandas Dataframe, TS for every pixel.
+
+    Example. (Column names are pixel indices)
+                               (0, 0)        (0, 1)        (0, 2) ...
+    2015-12-29 08:03:50  1.951377e-05  2.943721e-06  2.627551e-05 ...
+    2016-01-18 08:06:16  9.143812e-05           NaN           NaN ...
+    2016-03-08 07:53:03  2.009606e-01  6.967517e-02  1.160830e-01 ...
+    2016-04-07 07:54:33           NaN           NaN           NaN ...
+    """
+    df_list = [], []
+    shape = None
+    for product in os.listdir(data):
+        if product.startswith('product') is False:
+            continue
+        path = os.path.join(data, product)
+        if os.path.isdir(path) is False:
+            continue
+        info = json.load(open(os.path.join(path, 'info.json')))
+        ndvi = NDVI(path)
+        mask = cloud_mask(path)
+        P, _ = forest_probability(ndvi, mask, missing_values=np.NaN)
+        if shape is None:
+            shape = P.shape
+        if shape != P.shape:
+            raise Exception('Products have different resolution')
+
+        df_list[0].append(P.flatten())
+        df_list[1].append(timestamp_to_datetime(info['Sensing start']))
+
+    df = pd.DataFrame(df_list[0], index=df_list[1],
+                      columns=list(np.ndindex(shape))).sort_index()
+    return df
 
 
 def debug_forest_probability(path):
@@ -82,11 +121,11 @@ def debug_forest_probability(path):
     Shows image, cloud mask, probabilities and NDVI distribution.
     :param path: str, path to product
     """
-    f_TCI1 = os.path.join(path, [x for x in os.listdir(path)
-                                 if x[-8:-5] == 'CI1'][0])
-    TCI1 = gdal.Open(f_TCI1).ReadAsArray().transpose(1, 2, 0)
+
+    TCI = gdal.Open(band_name(
+        path, Bands.TCI)).ReadAsArray().transpose(1, 2, 0)
     ndvi = NDVI(path)
-    mask = get_cloud_mask_path(path + '/')
+    mask = cloud_mask(path + '/')
     P, D = forest_probability(ndvi, mask, missing_values=0.5)
 
     X = np.linspace(np.min(ndvi), np.max(ndvi), 100)
@@ -98,7 +137,7 @@ def debug_forest_probability(path):
     plt.figure(figsize=(18, 5))
 
     plt.subplot(141)
-    plt.imshow(TCI1)
+    plt.imshow(TCI)
 
     plt.subplot(142)
     plt.imshow(mask)

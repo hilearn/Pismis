@@ -12,9 +12,9 @@ from config import USERNAME, PASSWORD
 def parse_arguments():
     parser = ArgumentParser(description='Query products for given footprint '
                                         'and time filter',
-                            epilog='example: python satquery.py'
-                                   ' ijevan.geojson -o q -p Sentinel-1'
-                                   ' --shuffle -s 6 -f 01-08-2017')
+                            epilog='example: python satquery.py ijevan.geojson'
+                                   ' --output q --platform Sentinel-1'
+                                   ' --shuffle --split 6 -from 01-08-2017')
     parser.add_argument('geojson', help='geojson file for fotprint')
     parser.add_argument('-f', '--from', help='query products starting from'
                         'this date, date format: DD-MM-YYYY', default=None)
@@ -105,12 +105,13 @@ if __name__ == '__main__':
         if args.split == 0:
             df.to_csv(args.output)
         else:
+            os.makedirs(args.output, exist_ok=True)
             files = [None] * args.split
             for i, product_id in enumerate(df.index):
                 i_file = i % args.split
                 if files[i_file] is None:
-                    files[i_file] = open(args.output + '.' + str(i_file+1) +
-                                         '.txt', 'w')
+                    files[i_file] = open(os.path.join(
+                        args.output, str(i_file+1) + '.txt'), 'w')
                 f = files[i_file]
                 f.write(product_id + '\n')
             for file in files:

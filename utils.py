@@ -3,25 +3,50 @@ import numpy as np
 from pyproj import Proj, transform
 import json
 import logging
+from datetime import datetime
+import time
 from glob import glob
 import os
+import enum
 
 logging.debug('import utils')
 
 
-def band_name(directory, band):
+@enum.unique
+class Bands(enum.Enum):
+    """
+    Sentinel 2 bands.
+    """
+    RED = 'B04'
+    GREEN = 'B03'
+    BLUE = 'B02'
+    NIR = 'B08'  # Near infrared
+    TCI = 'TCI'  # Colored image
+    TCI1 = 'TIC1'
+
+
+def timestamp_to_datetime(timestamp):
+    """
+    Converts 13 digit timestamp to datetime object
+    :param timestamp: int
+    :return: datetime
+    """
+    return datetime.fromtimestamp(time.mktime(time.gmtime(timestamp / 1000.)))
+
+
+def band_name(directory, band, extension='.tiff'):
     """
     Get band name we need from given <directory>
 
     :param directory: The directory containing bands (...B04.tiff,
                       ...B03.tiff, ... )
-    :param band: The UNIQUE string band name should contain e.g. "B04",
-                 "TCI" e.c.
+    :param band: Bands enum
+    :param extension: str, extension of the file, (e.g. ".tiff", ".jp2")
     :return: Full band name (including directory)
     """
-    names = glob("{}/*.tiff".format(os.path.normpath(directory)))
+    names = glob("{}/*{}".format(os.path.normpath(directory), extension))
     for name in names:
-        if name.endswith(band + ".tiff"):
+        if name.endswith(band.value + extension):
             return name
     return None
 
@@ -33,7 +58,6 @@ def coordinates_from_geojson(geojson):
         path o geojson file
     :return: vertices of the polygon
     """
-
     f = json.load(open(geojson, 'r'))
     return np.array(f['features'][0]['geometry']['coordinates'][0][:-1])
 
@@ -121,7 +145,6 @@ def get_corner_coordinates(image_name):
 
 def change_datatype(input_file, output_file=None, processor=lambda x: x,
                     output_type=gdal.GDT_Byte):
-
     if output_file is None:
         output_file = input_file
 

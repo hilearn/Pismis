@@ -1,11 +1,11 @@
-from mix import color_image, brightness_limitization
+from mix import save_color_image, brightness_limitization
 import os
 import shutil
 from argparse import ArgumentParser
-from datetime import datetime
-import time
 import json
 from utils import change_datatype
+from utils import timestamp_to_datetime
+from utils import Bands
 
 
 def parse_arguments():
@@ -42,8 +42,8 @@ def color_images(directory, bright_limit=3500):
                 sentinel = info['Satellite']
                 if sentinel == 'Sentinel-2':
                     print('Coloring ' + root + '...')
-                    color_image(root, 'B04', 'B03', 'B02', 'TCI1',
-                                bright_limit)
+                    save_color_image(root, Bands.RED, Bands.GREEN, Bands.BLUE,
+                                     'TCI1', bright_limit)
                 elif sentinel == 'Sentinel-1':
                     print('Changing DType to uint8 ' + root + '...')
                     for file in files:
@@ -64,15 +64,6 @@ def color_images(directory, bright_limit=3500):
                 print('Error: ' + 'Path: ' + root + '\n' + str(e))
 
 
-def from_timestamp(timestamp):
-    """
-    Converts 13 digit timestamp to datetime object
-    :param timestamp: int
-    :return: datetime
-    """
-    return datetime.fromtimestamp(time.mktime(time.gmtime(timestamp / 1000.)))
-
-
 def collect_images(search_directory, target='./colored'):
     """
     Search colored images in <search_directory> and copy them
@@ -91,7 +82,7 @@ def collect_images(search_directory, target='./colored'):
                 info = json.load(open(os.path.join(product_dir,
                                                    'info.json'), 'r'))
 
-                sensing_start = from_timestamp(info['Sensing start'])
+                sensing_start = timestamp_to_datetime(info['Sensing start'])
 
                 new_file = info['Satellite'] + \
                     ' {:%Y-%m-%d %H:%M} '.format(sensing_start) + \
