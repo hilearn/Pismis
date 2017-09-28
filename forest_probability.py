@@ -13,6 +13,16 @@ from utils import band_name
 from utils import Bands
 
 
+def parse_arguments():
+    parser = ArgumentParser(description='Save Forest Probabilities Time Series'
+                                        ' for each pixel to csv file')
+    parser.add_argument('path', help='path to preprocessed products')
+    parser.add_argument('output', help='Output file name')
+    parser.add_argument('--float-precision', type=int, default=3,
+                        help='Number of digits after the decimal point')
+    return parser.parse_args()
+
+
 def multi_normal_pdf(x, mean, covariance):
     """
     Evaluates Multivariate Gaussian Distribution density function
@@ -78,10 +88,10 @@ def NDVI(path):
         NIR.astype('float') + RED.astype('float'))
 
 
-def forest_probabilities_TS(data):
+def forest_probabilities_TS(data_path):
     """
     Return time series for every pixel.
-    :param data: str, path to processed data.
+    :param data_path: str, path to processed data.
     :return: Pandas Dataframe, TS for every pixel.
 
     Example. (Column names are pixel indices)
@@ -93,10 +103,10 @@ def forest_probabilities_TS(data):
     """
     df_list = [], []
     shape = None
-    for product in os.listdir(data):
+    for product in os.listdir(data_path):
         if product.startswith('product') is False:
             continue
-        path = os.path.join(data, product)
+        path = os.path.join(data_path, product)
         if os.path.isdir(path) is False:
             continue
         info = json.load(open(os.path.join(path, 'info.json')))
@@ -151,13 +161,10 @@ def debug_forest_probability(path):
     plt.show()
 
 
-def parse_arguments():
-    parser = ArgumentParser(description='Shows image, cloud mask, '
-                                        'probabilities and NDVI distribution,')
-    parser.add_argument('path', help='path to product')
-    return parser.parse_args()
-
-
 if __name__ == '__main__':
     args = parse_arguments()
-    debug_forest_probability(args.path)
+    df = forest_probabilities_TS(args.path)
+    output = args.output
+    if output.endswith('.csv') is False:
+        output += '.csv'
+    df.to_csv(output, float_format='%0.{}f'.format(args.float_precision))
