@@ -30,6 +30,9 @@ def parse_arguments():
                         default='Sentinel-2')
     parser.add_argument('--shuffle', help='Shuffle product ids.',
                         action='store_true')
+    parser.add_argument('--skip-cloudy-percentage', type=int,
+                        help='Query Copernicus not to include images that '
+                             'have very high cloud cover', default=95)
 
     return parser.parse_args()
 
@@ -38,21 +41,22 @@ def parse_date(date):
     return datetime.strptime(date, "%d-%m-%Y")
 
 
-def satquery(geojson, date_from=None, date_to=None, platform='Sentinel-2'):
+def satquery(geojson, date_from=None, date_to=None, platform='Sentinel-2',
+             cloud_cover_percentage=95):
     """
-    Args:
-        geojson: str
-            The geojson file path for footprint.
-        date_from: datetime, optional
-        date_to: datetime, optional
-            The time interval filter based on the
-            Sensing Date of the products
-        platform: string
-            'Sentinel-1' or 'Sentinel-2'
-
-    Returns:
-        Return the products from a query response as a Pandas DataFrame
-        with the values in their appropriate Python types.
+    Query products with given properties.
+    :param geojson: str
+        The geojson file path for footprint.
+    :param date_from: datetime, optional
+    :param date_to: datetime, optional
+        The time interval filter based on the
+        Sensing Date of the products
+    :param platform: string
+        'Sentinel-1' or 'Sentinel-2'
+    :param cloud_cover_percentage, Maximum cloud coverage percentage. Hundred
+        percent cloud cover means no clear sky is visible. Default is 95%
+    :return: Pandas DataFrame, Return the products from a query response as
+        a Pandas DataFrame with the values in their appropriate Python types.
     """
 
     api = SentinelAPI(USERNAME, PASSWORD, 'https://scihub.copernicus.eu/dhus')
@@ -63,6 +67,8 @@ def satquery(geojson, date_from=None, date_to=None, platform='Sentinel-2'):
     if platform == 'Sentinel-1':
         # Level-1 Ground Range Detected (GRD) products
         kwargs['producttype'] = 'GRD'
+    elif platform == 'Sentinel-2':
+        kwargs['cloudcoverpercentage'] = (0, cloud_cover_percentage)
 
     products = api.query(footprint, date=(date_from, date_to),
                          area_relation='Contains', **kwargs)
@@ -84,7 +90,8 @@ if __name__ == '__main__':
     else:
         date_to = parse_date(getattr(args, 'to'))
 
-    df = satquery(args.geojson, date_from, date_to, args.platform)
+    df = satquery(args.geojson, date_from, date_to, platform=args.platform,
+                  cloud_cover_percentage=args.skip_cloudy_percentage)
 
     # Estimate download size
     size = 0
@@ -100,7 +107,9 @@ if __name__ == '__main__':
         df = df.iloc[np.random.permutation(len(df))]
 
     print(df[['beginposition', 'size']])
-    print('Total size: %0.2f' % size + ' GB')
+    print('Maximum cloud percentage: {}%'.format(args.skip_cloudy_percentage))
+    print('Total products: {}'.format(len(df)))
+    print('Total size: {:.2f}GB'.format(size))
     if args.output is not None:
         if args.split == 0:
             df.to_csv(args.output)
