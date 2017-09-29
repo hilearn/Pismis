@@ -117,7 +117,6 @@ def remove_unactionable_images(data):
 
 if __name__ == '__main__':
     args = parse_arguments()
-    print(dir(args))
 
     copy_and_format_names(args.input_dir, args.output_dir)
 

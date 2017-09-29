@@ -1,11 +1,11 @@
 import numpy as np
 import cv2
-from utils import band_name
+from utils import band_name, Bands
 import os
-from utils import Bands
 from osgeo import gdal, osr
 import shutil
 from argparse import ArgumentParser
+import json
 
 
 def parse_arguments():
@@ -73,7 +73,7 @@ def align_product(prouct_path, warp_matrix, aligned_product_path=None,
     :param prouct_path: str, path to product
     :param warp_matrix: 2x3 array, warp matrix for warping/aligning images.
     :param aligned_product_path: str, directory for aligned product,
-        By default it creates "aligned" folder insode product directory.
+        By default it creates "aligned" folder inside product directory.
     :param size: tuple, size of aligned images
     :return: str, aligned product path
     """
@@ -83,12 +83,10 @@ def align_product(prouct_path, warp_matrix, aligned_product_path=None,
 
     for file in os.listdir(prouct_path):
         path_to_file = os.path.join(prouct_path, file)
-        if os.path.isdir(path_to_file):
-            continue
         if file.endswith('.tiff'):
             warp_image(path_to_file, warp_matrix,
                        os.path.join(aligned_product_path, file), size)
-        else:
+        elif file.startswith('info.'):
             shutil.copy(path_to_file, aligned_product_path)
     return aligned_product_path
 
@@ -123,25 +121,61 @@ def get_warp_matrix(base_image, image):
     return warp_matrix
 
 
-def align_data(data_path, base_product, aligned_data_path):
+def align_data(data_path, base_product, aligned_data_path,
+               align_info_file="align_info.json"):
     """
     Aligns all products in data directory by given base product.
-    :param data_path: str, path to preprocessed data.
+    e.g. align_data("Ijevan","Ijevan/product","Ijevan_aligned")
+
+    :param data_path: str, path to preprocessed data / Ijevan
     :param base_product: str, base broduct
     :param aligned_data_path: str, directory for aligned products
     """
+    exists_align_json = os.path.exists(
+        os.path.join(data_path, align_info_file))
+
+    if exists_align_json:
+        with open(os.path.join(data_path, align_info_file), "r") as f:
+            align_info = json.load(f)
+
     base_image_path = band_name(base_product, Bands.TCI)
     base_array = gdal.Open(base_image_path).ReadAsArray().transpose(1, 2, 0)
     size = base_array.shape
+
     print('Base product: ' + base_product)
+
     for product in os.listdir(data_path):
         path = os.path.join(data_path, product)
         if os.path.exists(os.path.join(path, 'info.json')) is False:
             continue
+
         print('Aligning {}...'.format(path))
         image_path = band_name(path, Bands.TCI)
         array = gdal.Open(image_path).ReadAsArray().transpose(1, 2, 0)
-        warp_matrix = get_warp_matrix(base_array, array)
+
+        if exists_align_json:
+            with open(os.path.join(path, "info.json"), "r") as f:
+                info = json.load(f)
+            yyxx = align_info["clear_rectangles"].get(info["title"])
+
+            if (yyxx is not None) and (len(yyxx) == 4):  # 0 in case of clear
+                base_array_cropped = base_array[yyxx[0]: yyxx[1],
+                                                yyxx[2]: yyxx[3]]
+                array_cropped = array[yyxx[0]: yyxx[1], yyxx[2]: yyxx[3]]
+            else:
+                base_array_cropped = base_array.copy()
+                array_cropped = array.copy()
+        else:
+            base_array_cropped = base_array.copy()
+            array_cropped = array.copy()
+
+        warp_matrix = get_warp_matrix(base_array_cropped, array_cropped)
+
+        if exists_align_json:
+            align_info["warp_matrices"][info["title"]] = warp_matrix.tolist()
+            with open(os.path.join(data_path, align_info_file), "w") as f:
+                json.dump(align_info, f)
+
         align_product(path, warp_matrix,
                       os.path.join(aligned_data_path, product), size=size)
         shutil.copy(band_name(os.path.join(aligned_data_path, product),

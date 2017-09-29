@@ -22,7 +22,7 @@ class Bands(enum.Enum):
     BLUE = 'B02'
     NIR = 'B08'  # Near infrared
     TCI = 'TCI'  # Colored image
-    TCI1 = 'TIC1'
+    TCI1 = 'TCI1'
 
 
 def timestamp_to_datetime(timestamp):
