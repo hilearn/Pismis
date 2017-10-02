@@ -6,6 +6,8 @@ from osgeo import gdal, osr
 import shutil
 from argparse import ArgumentParser
 import json
+from distutils.dir_util import copy_tree
+from glob import glob
 
 
 def parse_arguments():
@@ -16,10 +18,43 @@ def parse_arguments():
     parser.add_argument('data', help='directory of preprocessed products.')
     parser.add_argument('output', help='directory for aligned products.')
 
-    parser.add_argument('--base', default=None,
-                        help="path to base broduct. If isn't given, "
-                             "random product will be chosen")
     return parser.parse_args()
+
+
+def create_init_align_json(data_path):
+    """
+    Creates align_info.json file containing warp_matrices and .geojson data. If
+    that file exists, add warp_matrices with None value for new products (if
+    found) and doesn't touch existing data
+
+    :param data_path: Directory containing products.
+        Be shure that there is .geojson file here
+    """
+    data_path = os.path.normpath(data_path)
+
+    json_file_name = os.path.join(data_path, "align_info.json")
+    if os.path.exists(json_file_name):
+        with open(json_file_name, "r") as f:
+            align_info = json.load(f)
+    else:
+        geojson_file_name = "{}.geojson".format(data_path)
+        with open(os.path.join(data_path, geojson_file_name), "r") as f:
+            crop_geojson = json.load(f)
+        align_info = {"crop_geojson": crop_geojson}
+        align_info["warp_matrices"] = {}
+
+    product_paths = glob("{}/*/".format(data_path))
+    for path in product_paths:
+        with open(os.path.join(path, "info.json")) as f:
+            product_info = json.load(f)
+            product_title = product_info["title"]
+
+        product_warp = align_info["warp_matrices"].get(product_title)
+        if product_warp is None:
+            align_info["warp_matrices"][product_title] = None
+
+    with open(json_file_name, "w") as f:
+        json.dump(align_info, f, indent=4)
 
 
 def warp_image(image, warp_matrix, output_image, size=None):
@@ -34,7 +69,8 @@ def warp_image(image, warp_matrix, output_image, size=None):
     dataset = gdal.Open(image)
     array = dataset.ReadAsArray()
     if size is None:
-        size = array.shape
+        size = array.shape[-2:]
+
     band_list = []
     for i in range(dataset.RasterCount):
         band = dataset.GetRasterBand(i + 1)  # 1-based index
@@ -91,7 +127,7 @@ def align_product(prouct_path, warp_matrix, aligned_product_path=None,
     return aligned_product_path
 
 
-def get_warp_matrix(base_image, image):
+def _get_warp_matrix(base_image, image):  # Allready unused
     """
     Align image to base image and return warp matrix.
     :param base_image: RGB array, base image
@@ -100,7 +136,7 @@ def get_warp_matrix(base_image, image):
     """
     # Define the motion model
     warp_mode = cv2.MOTION_TRANSLATION
-    warp_matrix = np.eye(2, 3, dtype=np.float32)
+    warp_matrix = np.eye(2, 3, dtype=np.float64)
 
     # Specify the number of iterations.
     number_of_iterations = 5000
@@ -121,7 +157,7 @@ def get_warp_matrix(base_image, image):
     return warp_matrix
 
 
-def align_data(data_path, base_product, aligned_data_path,
+def align_data(data_path, aligned_data_path,
                align_info_file="align_info.json"):
     """
     Aligns all products in data directory by given base product.
@@ -131,18 +167,8 @@ def align_data(data_path, base_product, aligned_data_path,
     :param base_product: str, base broduct
     :param aligned_data_path: str, directory for aligned products
     """
-    exists_align_json = os.path.exists(
-        os.path.join(data_path, align_info_file))
-
-    if exists_align_json:
-        with open(os.path.join(data_path, align_info_file), "r") as f:
-            align_info = json.load(f)
-
-    base_image_path = band_name(base_product, Bands.TCI)
-    base_array = gdal.Open(base_image_path).ReadAsArray().transpose(1, 2, 0)
-    size = base_array.shape
-
-    print('Base product: ' + base_product)
+    with open(os.path.join(data_path, align_info_file), "r") as f:
+        align_info = json.load(f)
 
     for product in os.listdir(data_path):
         path = os.path.join(data_path, product)
@@ -150,34 +176,21 @@ def align_data(data_path, base_product, aligned_data_path,
             continue
 
         print('Aligning {}...'.format(path))
-        image_path = band_name(path, Bands.TCI)
-        array = gdal.Open(image_path).ReadAsArray().transpose(1, 2, 0)
 
-        if exists_align_json:
-            with open(os.path.join(path, "info.json"), "r") as f:
-                info = json.load(f)
-            yyxx = align_info["clear_rectangles"].get(info["title"])
+        with open(os.path.join(path, 'info.json'), "r") as f:
+            product_info = json.load(f)
 
-            if (yyxx is not None) and (len(yyxx) == 4):  # 0 in case of clear
-                base_array_cropped = base_array[yyxx[0]: yyxx[1],
-                                                yyxx[2]: yyxx[3]]
-                array_cropped = array[yyxx[0]: yyxx[1], yyxx[2]: yyxx[3]]
-            else:
-                base_array_cropped = base_array.copy()
-                array_cropped = array.copy()
+        warp_matrix = align_info["warp_matrices"].get(product_info["title"])
+
+        print(warp_matrix)
+
+        if warp_matrix is not None:
+            warp_matrix = np.array(warp_matrix, dtype=np.float32)
+            align_product(path, warp_matrix,
+                          os.path.join(aligned_data_path, product))
         else:
-            base_array_cropped = base_array.copy()
-            array_cropped = array.copy()
+            copy_tree(path, os.path.join(aligned_data_path, product))
 
-        warp_matrix = get_warp_matrix(base_array_cropped, array_cropped)
-
-        if exists_align_json:
-            align_info["warp_matrices"][info["title"]] = warp_matrix.tolist()
-            with open(os.path.join(data_path, align_info_file), "w") as f:
-                json.dump(align_info, f)
-
-        align_product(path, warp_matrix,
-                      os.path.join(aligned_data_path, product), size=size)
         shutil.copy(band_name(os.path.join(aligned_data_path, product),
                               Bands.TCI),
                     os.path.join(aligned_data_path, product + '.tiff'))
@@ -185,12 +198,4 @@ def align_data(data_path, base_product, aligned_data_path,
 
 if __name__ == '__main__':
     args = parse_arguments()
-    base_product_path = args.base
-    for product in os.listdir(args.data):
-        if base_product_path is not None:
-            break
-        path = os.path.join(args.data, product)
-        if os.path.exists(os.path.join(path, 'info.json')) is False:
-            continue
-        base_product_path = path
-    align_data(args.data, base_product_path, args.output)
+    align_data(args.data, args.output)

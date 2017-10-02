@@ -10,6 +10,7 @@ from utils import transform_coordinates
 from utils import timestamp_to_datetime
 from utils import band_name
 from utils import Bands
+from datetime import datetime
 
 
 def parse_arguments():
@@ -20,7 +21,8 @@ def parse_arguments():
                                    'output-dir croppped_cleaned_data')
     parser.add_argument('--geojson', help='crop images with this geojson'
                                           ' if provided', default=None)
-    parser.add_argument('input_dir', help='directory for images.')
+    parser.add_argument('--input-dir', help='directory for images.',
+                        required=True)
     parser.add_argument('-o', '--output-dir',
                         help='Directory to save cropped, cleaned data.',
                         default='./data')
@@ -105,7 +107,7 @@ def remove_unactionable_images(data):
         path = os.path.join(data, product)
         if os.path.isdir(path) is False:
             continue
-        if is_useful(path, 0.1) is False:
+        if is_useful(path, 0.5) is False:
             print('\tRemoving ' + path)
             shutil.copy(os.path.join(path, 'TCI.tiff'),
                         os.path.join(data, 'removed', product + '.tiff'))
@@ -113,6 +115,48 @@ def remove_unactionable_images(data):
         else:
             shutil.copy(os.path.join(path, 'TCI.tiff'),
                         os.path.join(data, product + '.tiff'))
+
+
+def seasonal(path, date_inf="15-05", date_sup="15-10"):
+    """
+    Resolve if given image (<path>) of season or not according to <date_inf>
+    and <date_sup>
+    :param path: Directory of the product
+    :param date_inf: Day of year in "dd-mm" format
+    :param date_sup: Day of year in "dd-mm" format
+    :return: Bull
+    """
+    with open(os.path.join(path, "info.json"), "r") as f:
+        info = json.load(f)
+
+    date_inf = datetime.strptime(date_inf, "%d-%m").timetuple().tm_yday
+    date_sup = datetime.strptime(date_sup, "%d-%m").timetuple().tm_yday
+    day_of_year = timestamp_to_datetime(
+        info['Sensing start']).timetuple().tm_yday
+
+    return (day_of_year > date_inf) and (day_of_year < date_sup)
+
+
+def remove_unseasonal_images(data, date_inf="15-05", date_sup="15-10"):
+    """
+    Disposs of images below May 15 and over Oct 15
+    :param data: str, path to products
+    :param date_inf: str, infimum date to consider product as seasonal
+    :param date_sup: str, supremum date to consider product as seasonal
+
+    """
+    os.makedirs(os.path.join(data, 'removed'), exist_ok=True)
+    for product in os.listdir(data):
+        if product.startswith('product') is False:
+            continue
+        path = os.path.join(data, product)
+        if os.path.isdir(path) is False:
+            continue
+        if seasonal(path, date_inf, date_sup) is False:
+            print('\tRemoving ' + path)
+            shutil.copy(os.path.join(path, 'TCI.tiff'),
+                        os.path.join(data, 'removed', product + '.tiff'))
+            shutil.rmtree(path)
 
 
 if __name__ == '__main__':
@@ -124,4 +168,5 @@ if __name__ == '__main__':
         crop_images(args.output_dir, transform_coordinates(
             coordinates_from_geojson(args.geojson)))
 
+    remove_unseasonal_images(args.output_dir)
     remove_unactionable_images(args.output_dir)
