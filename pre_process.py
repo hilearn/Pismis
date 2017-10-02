@@ -29,11 +29,12 @@ def parse_arguments():
     return parser.parse_args()
 
 
-def copy_and_format_names(origin, destination):
+def copy_and_format_names(origin, destination, selection=None):
     """
     Remove duplicate images.
     :param origin: str, path to original data.
     :param destination: str, directory to copy and format files.
+    :param selection: array, coordinates to crop images
     """
     # From products with the same date-time keep only one.
     product_paths = []
@@ -64,16 +65,22 @@ def copy_and_format_names(origin, destination):
         if tail is None:
             continue
         # useful bands
-        bands = [Bands.RED, Bands.GREEN, Bands.BLUE, Bands.NIR]
+        bands = [Bands.RED, Bands.GREEN, Bands.BLUE, Bands.NIR, Bands.SWIR]
         os.makedirs(os.path.join(destination, date_str), exist_ok=True)
         for band in bands:
-            shutil.copy(band_name(tail, band),
-                        os.path.join(destination, date_str,
-                                     band.value + '.tiff'))
+            if selection is None:
+                shutil.copy(band_name(tail, band),
+                            os.path.join(destination, date_str,
+                                         band.value + '.tiff'))
+            else:
+                crop(selection, band_name(tail, band),
+                     os.path.join(destination, date_str,
+                                  band.value + '.tiff'))
         # create colored image
-        save_color_image(tail, Bands.RED, Bands.GREEN, Bands.BLUE,
+        save_color_image(os.path.join(destination, date_str),
+                         Bands.RED, Bands.GREEN, Bands.BLUE,
                          output_file=os.path.join(
-                             destination, date_str, 'TCI.tiff'))
+                             destination, date_str, Bands.TCI.value + '.tiff'))
 
         # copy info files
         shutil.copy(os.path.join(path, 'info.json'),
@@ -161,12 +168,10 @@ def remove_unseasonal_images(data, date_inf="15-05", date_sup="15-10"):
 
 if __name__ == '__main__':
     args = parse_arguments()
-
-    copy_and_format_names(args.input_dir, args.output_dir)
-
+    selection = None
     if args.geojson is not None:
-        crop_images(args.output_dir, transform_coordinates(
-            coordinates_from_geojson(args.geojson)))
-
-    remove_unseasonal_images(args.output_dir)
+        selection = transform_coordinates(
+            coordinates_from_geojson(args.geojson))
+    copy_and_format_names(args.input_dir, args.output_dir, selection)
+    # remove_unseasonal_images(args.output_dir)
     remove_unactionable_images(args.output_dir)

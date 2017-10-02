@@ -21,6 +21,7 @@ class Bands(enum.Enum):
     GREEN = 'B03'
     BLUE = 'B02'
     NIR = 'B08'  # Near infrared
+    SWIR = 'B11'  # Short-wave infrared
     TCI = 'TCI'  # Colored image
     TCI1 = 'TCI1'
 

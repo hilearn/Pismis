@@ -174,17 +174,11 @@ def align_data(data_path, aligned_data_path,
         path = os.path.join(data_path, product)
         if os.path.exists(os.path.join(path, 'info.json')) is False:
             continue
-
-        print('Aligning {}...'.format(path))
-
         with open(os.path.join(path, 'info.json'), "r") as f:
             product_info = json.load(f)
-
         warp_matrix = align_info["warp_matrices"].get(product_info["title"])
-
-        print(warp_matrix)
-
         if warp_matrix is not None:
+            print('Aligning {}...'.format(path))
             warp_matrix = np.array(warp_matrix, dtype=np.float32)
             align_product(path, warp_matrix,
                           os.path.join(aligned_data_path, product))
