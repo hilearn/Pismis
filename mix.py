@@ -11,9 +11,9 @@ import numpy as np
 import os
 import logging
 import matplotlib.pyplot as plt
-from PIL import Image
 from utils import Bands
 from utils import band_name
+from utils import resize_band
 
 
 def parse_args():
@@ -43,22 +43,6 @@ def brightness_limitization(channel, bright_limit=3500):
     channel[channel > bright_limit] = bright_limit
     channel = channel * 255.0 / bright_limit
     return channel
-
-
-def resize_band(image, height, width):
-    """
-    Returns a resized copy of image.
-    :param image: 2-dimensional array
-    :param height: height in pixels
-    :param width: width in pixels
-    :return: 2-dimensional array
-    """
-    if image.shape == (height, width):
-        return image
-    img = Image.fromarray(image)
-    img = img.resize((width, height))
-    return np.array(img.getdata(),
-                    np.uint8).reshape(img.size[1], img.size[0])
 
 
 def mix(red_channel, green_channel, blue_channel, bright_limit=3500):
@@ -123,12 +107,9 @@ def save_color_image(directory, r_band, g_band, b_band, suffix='TCI1',
                    blue_channel.shape)))
         resolution = max(red_channel.shape, green_channel.shape,
                          blue_channel.shape)
-        red_channel = resize_band(red_channel,
-                                  resolution[0], resolution[1])
-        green_channel = resize_band(green_channel,
-                                    resolution[0], resolution[1])
-        blue_channel = resize_band(blue_channel,
-                                   resolution[0], resolution[1])
+        red_channel = resize_band(red_channel, resolution)
+        green_channel = resize_band(green_channel, resolution)
+        blue_channel = resize_band(blue_channel, resolution)
 
     image = mix(red_channel, green_channel, blue_channel, bright_limit)
 

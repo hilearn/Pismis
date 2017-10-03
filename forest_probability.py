@@ -11,8 +11,8 @@ import json
 from utils import timestamp_to_datetime
 from utils import band_name
 from utils import Bands
-from scipy.signal import convolve2d
-from mix import resize_band
+from scipy.signal import convolve as convolution
+from utils import resize_band
 
 
 def parse_arguments():
@@ -39,7 +39,7 @@ def multi_normal_pdf(x, mean, covariance):
     return var.pdf(x)
 
 
-def forest_probability(ndvi, mask=None, predict_ndvi=None,
+def forest_probability(index, mask=None, predict_index=None,
                        missing_values=np.NaN):
     """
     Estimates forest probability for each pixel using Gaussian Mixture model.
@@ -53,24 +53,25 @@ def forest_probability(ndvi, mask=None, predict_ndvi=None,
         modeled distribution (i.e. means, weights, variances)
     """
     if mask is None:
-        mask = np.ones_like(ndvi)
-
-    if mask.shape != ndvi.shape:
+        mask = np.ones(index.shape[:2])
+    if mask.shape != index.shape[:2]:
         raise Exception('Wrong mask dimension')
 
-    if predict_ndvi is None:
-        predict_ndvi = ndvi
+    if predict_index is None:
+        predict_index = index
 
-    gmm = mixture.GaussianMixture(n_components=2)
-    gmm.fit(ndvi[mask == 1].reshape(-1, 1))
+    gmm = mixture.GaussianMixture(2)
+    # TODO: mask should be used here
+    gmm.fit(index.reshape(-1, index.shape[-1]))
+    pixel_cluster_proba = gmm.predict_proba(predict_index.reshape(
+        -1, index.shape[-1])).reshape(*index.shape[:2], 2)
+
     covariances = gmm.covariances_[:]
-    pixel_cluster_proba = gmm.predict_proba(
-        predict_ndvi.reshape(-1, 1)).reshape(ndvi.shape[0], ndvi.shape[1], 2)
     weights = gmm.weights_.copy()
     means = gmm.means_.copy()
 
     P = pixel_cluster_proba[..., 1]
-    if means[0] > means[1]:
+    if means[0, 0] > means[1, 0]:
         P = pixel_cluster_proba[..., 0]
 
     P[mask == 0] = missing_values
@@ -82,19 +83,79 @@ def forest_probability(ndvi, mask=None, predict_ndvi=None,
     }
 
 
-def NDVI(path):
+def NDVI(path, size=None):
     """
     Calculates NDVI for product
     :param path: str, path to product.
+    :param size: (height, width), output size.
+        If not given, use size of bands.
     :return: array, NDVI
     """
     NIR = gdal.Open(band_name(path, Bands.NIR)).ReadAsArray()
     RED = gdal.Open(band_name(path, Bands.RED)).ReadAsArray()
-    size = max(NIR.shape, RED.shape)
-    NIR = resize_band(NIR, size[0], size[1])
-    RED = resize_band(RED, size[0], size[1])
+    if size is None:
+        size = max(NIR.shape, RED.shape)
+    NIR = resize_band(NIR, size)
+    RED = resize_band(RED, size)
     return (NIR.astype('float') - RED.astype('float')) / (
         NIR.astype('float') + RED.astype('float'))
+
+
+def index_tensor(path, size=None):
+    """
+    Calculates 13 different deforestation indices
+    :param path: str, path to product.
+    :param size: (height, width), output size.
+        If not given, use maximal size of bands.
+    :return: array (size, 13)
+    """
+    B02 = gdal.Open(band_name(path, Bands.B02)).ReadAsArray().astype('float32')
+    if size is None:
+        size = B02.shape
+    B03 = resize_band(gdal.Open(band_name(path, Bands.B03)).ReadAsArray(),
+                      size).astype('float32')
+    B04 = resize_band(gdal.Open(band_name(path, Bands.B04)).ReadAsArray(),
+                      size).astype('float32')
+    B05 = resize_band(gdal.Open(band_name(path, Bands.B05)).ReadAsArray(),
+                      size).astype('float32')
+    B06 = resize_band(gdal.Open(band_name(path, Bands.B06)).ReadAsArray(),
+                      size).astype('float32')
+    B08 = resize_band(gdal.Open(band_name(path, Bands.B08)).ReadAsArray(),
+                      size).astype('float32')
+    B11 = resize_band(gdal.Open(band_name(path, Bands.B11)).ReadAsArray(),
+                      size).astype('float32')
+    B12 = resize_band(gdal.Open(band_name(path, Bands.B12)).ReadAsArray(),
+                      size).astype('float32')
+    index = [
+        # NDVI
+        (B08 - B04) / (B08 + B04),
+        # SR
+        # B08 / B04,
+        # MSI
+        (B11 / B08),
+        # NDVI705
+        (B06 - B05) / (B06 + B05),
+        # SAVI
+        1.5 * (B08 - B04) / (B08 + B04 + 0.5),
+        # PSRI-NIR
+        (B04 - B02) / B08,
+        # PSRI
+        (B04 - B02) / B05,
+        # NBR-RAW
+        (B08 - B12) / (B08 + B12),
+        # MSAVI2
+        (B08 + 1) - 0.5 * np.sqrt((2 * B08 - 1) ** 2 + 8 * B04),
+        # LAI-SAVI
+        -np.log(0.371 + 1.5 * (B08 - B04) / (B08 + B04 + 0.5)) / 2.4,
+        # GRVI1
+        (B04 - B03) / (B04 + B03),
+        # GNDVI
+        (B08 - B03) / (B08 + B03),
+        # EVI2
+        # 2.5 * (B08 - B04) / (B08 + 2.4 * B04 + 1),
+        # NDMI
+        (B08 - B11) / (B11 + B08)]
+    return np.stack(index, axis=-1)
 
 
 def forest_probabilities_TS(data_path, convolve=False):
@@ -111,7 +172,7 @@ def forest_probabilities_TS(data_path, convolve=False):
     2016-04-07 07:54:33           NaN           NaN           NaN ...
     """
     kernel_size = 3
-    kernel = np.ones((kernel_size, kernel_size))/kernel_size**2
+    kernel = np.ones((kernel_size, kernel_size)) / kernel_size ** 2
     df_list = [], []
     shape = None
     for product in os.listdir(data_path):
@@ -121,14 +182,15 @@ def forest_probabilities_TS(data_path, convolve=False):
         if os.path.isdir(path) is False:
             continue
         info = json.load(open(os.path.join(path, 'info.json')))
-        ndvi = NDVI(path)
-        ndvi_convolved = ndvi
-        if convolve:
-            ndvi_convolved = convolve2d(ndvi, kernel,
-                                        mode='full', boundary='symm')
+        # index = NDVI(path)[..., None]
+        index = index_tensor(path)
 
+        index_convolved = index
+        if convolve:
+            index_convolved = convolution(index, kernel[..., None],
+                                          mode='full', boundary='symm')
         mask = cloud_mask(path)
-        P, _ = forest_probability(ndvi, mask, ndvi_convolved,
+        P, _ = forest_probability(index, mask, index_convolved,
                                   missing_values=np.NaN)
         if shape is None:
             shape = P.shape

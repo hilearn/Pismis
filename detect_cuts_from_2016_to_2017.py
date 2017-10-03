@@ -32,7 +32,7 @@ if __name__ == '__main__':
 
     df2016 = df[(df.index > start2016) & (df.index < end2016)].mean(axis=0)
     df2017 = df[(df.index > start2017) & (df.index < end2017)].mean(axis=0)
-    deforestation_points = df2016.index[df2016 - df2017 > 1 - 0.3]
+    deforestation_points = df2016.index[df2016 - df2017 > 1 - 0.5]
     print('Points: {}'.format(len(deforestation_points)))
 
     plt.figure(figsize=(15, 15))

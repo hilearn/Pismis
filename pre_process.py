@@ -16,9 +16,9 @@ from datetime import datetime
 def parse_arguments():
     parser = ArgumentParser(description='Crop, align images and keep '
                                         'only clean ones',
-                            epilog='pre_process.py narrow_area_of_interest.ge'
-                                   'ojson --input-dir cropped_raw_data_dir --'
-                                   'output-dir croppped_cleaned_data')
+                            epilog='pre_process.py --geojson narrow_area_of_in'
+                                   'terest.geojson --input-dir cropped_raw_dat'
+                                   'a_dir --output-dir croppped_cleaned_data')
     parser.add_argument('--geojson', help='crop images with this geojson'
                                           ' if provided', default=None)
     parser.add_argument('--input-dir', help='directory for images.',
@@ -26,6 +26,8 @@ def parse_arguments():
     parser.add_argument('-o', '--output-dir',
                         help='Directory to save cropped, cleaned data.',
                         default='./data')
+    parser.add_argument('--remove-unseasonal-images', action='store_true',
+                        help='Disposs of images below May 15 and over Oct 15')
     return parser.parse_args()
 
 
@@ -65,7 +67,10 @@ def copy_and_format_names(origin, destination, selection=None):
         if tail is None:
             continue
         # useful bands
-        bands = [Bands.RED, Bands.GREEN, Bands.BLUE, Bands.NIR, Bands.SWIR]
+        bands = [Bands.RED, Bands.GREEN, Bands.BLUE,
+                 Bands.NIR,
+                 Bands.B05, Bands.B06, Bands.B07,
+                 Bands.B01, Bands.B11, Bands.B12, Bands.B10]
         os.makedirs(os.path.join(destination, date_str), exist_ok=True)
         for band in bands:
             if selection is None:
@@ -173,5 +178,6 @@ if __name__ == '__main__':
         selection = transform_coordinates(
             coordinates_from_geojson(args.geojson))
     copy_and_format_names(args.input_dir, args.output_dir, selection)
-    # remove_unseasonal_images(args.output_dir)
+    if args.remove_unseasonal_images:
+        remove_unseasonal_images(args.output_dir)
     remove_unactionable_images(args.output_dir)

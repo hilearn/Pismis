@@ -8,11 +8,11 @@ import time
 from glob import glob
 import os
 import enum
+from scipy.ndimage import zoom
 
 logging.debug('import utils')
 
 
-@enum.unique
 class Bands(enum.Enum):
     """
     Sentinel 2 bands.
@@ -24,6 +24,32 @@ class Bands(enum.Enum):
     SWIR = 'B11'  # Short-wave infrared
     TCI = 'TCI'  # Colored image
     TCI1 = 'TCI1'
+
+    B01 = 'B01'
+    B02 = 'B02'
+    B03 = 'B03'
+    B04 = 'B04'
+    B05 = 'B05'
+    B06 = 'B06'
+    B07 = 'B07'
+    B08 = 'B08'
+    B8A = 'B8A'
+    B09 = 'B09'
+    B10 = 'B10'
+    B11 = 'B11'
+    B12 = 'B12'
+
+
+def resize_band(image, size):
+    """
+    Returns a resized copy of image.
+    :param image: 2-dimensional array
+    :param size: (height, width), height and width in pixels
+    :return: 2-dimensional array
+    """
+    if image.shape == size:
+        return image
+    return zoom(image, zoom=np.divide(size, image.shape))
 
 
 def timestamp_to_datetime(timestamp):
