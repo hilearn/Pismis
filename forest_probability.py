@@ -138,7 +138,7 @@ def index_tensor(path, size=None):
         # SAVI
         1.5 * (B08 - B04) / (B08 + B04 + 0.5),
         # PSRI-NIR
-        (B04 - B02) / B08,
+        # (B04 - B02) / B08,
         # PSRI
         (B04 - B02) / B05,
         # NBR-RAW
@@ -181,6 +181,7 @@ def forest_probabilities_TS(data_path, convolve=False):
         path = os.path.join(data_path, product)
         if os.path.isdir(path) is False:
             continue
+        print('\t' + product)
         info = json.load(open(os.path.join(path, 'info.json')))
         # index = NDVI(path)[..., None]
         index = index_tensor(path)
@@ -210,10 +211,9 @@ def debug_forest_probability(path):
     Shows image, cloud mask, probabilities and NDVI distribution.
     :param path: str, path to product
     """
-
     TCI = gdal.Open(band_name(
         path, Bands.TCI)).ReadAsArray().transpose(1, 2, 0)
-    ndvi = NDVI(path)
+    ndvi = NDVI(path)[..., None]
     mask = cloud_mask(path + '/')
     P, D = forest_probability(ndvi, mask, missing_values=0.5)
 

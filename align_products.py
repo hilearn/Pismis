@@ -8,6 +8,7 @@ from argparse import ArgumentParser
 import json
 from distutils.dir_util import copy_tree
 from glob import glob
+from utils import get_product_title
 
 
 def parse_arguments():
@@ -16,8 +17,12 @@ def parse_arguments():
                             epilog='python align_products.py ./data'
                                    ' --base ./base_product')
     parser.add_argument('data', help='directory of preprocessed products.')
-    parser.add_argument('output', help='directory for aligned products.')
-
+    parser.add_argument('--output', help='directory for aligned products.',
+                        default=None)
+    parser.add_argument('--align_info', default=None,
+                        help='Path to align_info.json containing warp '
+                             'matrices for aligning, if not given, uses '
+                             'file in data_path')
     return parser.parse_args()
 
 
@@ -40,11 +45,12 @@ def create_init_align_json(data_path):
         geojson_file_name = "{}.geojson".format(data_path)
         with open(os.path.join(data_path, geojson_file_name), "r") as f:
             crop_geojson = json.load(f)
-        align_info = {"crop_geojson": crop_geojson}
-        align_info["warp_matrices"] = {}
+        align_info = {"crop_geojson": crop_geojson, "warp_matrices": {}}
 
     product_paths = glob("{}/*/".format(data_path))
     for path in product_paths:
+        if os.path.exists(os.path.join(path, "info.json")) is False:
+            continue
         with open(os.path.join(path, "info.json")) as f:
             product_info = json.load(f)
             product_title = product_info["title"]
@@ -157,26 +163,33 @@ def _get_warp_matrix(base_image, image):  # Allready unused
     return warp_matrix
 
 
-def align_data(data_path, aligned_data_path,
-               align_info_file="align_info.json"):
+def align_data(data_path, aligned_data_path=None,
+               align_info_file=None):
     """
     Aligns all products in data directory by given base product.
-    e.g. align_data("Ijevan","Ijevan/product","Ijevan_aligned")
+    e.g. align_data("Ijevan", "Ijevan_aligned")
 
     :param data_path: str, path to preprocessed data / Ijevan
-    :param base_product: str, base broduct
     :param aligned_data_path: str, directory for aligned products
+    :param align_info_file: str, path to align_info.json, if not given,
+        uses file in data_path.
     """
-    with open(os.path.join(data_path, align_info_file), "r") as f:
+    if aligned_data_path is None:
+        aligned_data_path = os.path.join(data_path, 'aligned')
+    if align_info_file is None:
+        align_info_file = os.path.join(data_path, 'align_info.json')
+    # create directory for aligned data
+    os.makedirs(aligned_data_path, exist_ok=True)
+
+    with open(align_info_file, "r") as f:
         align_info = json.load(f)
 
     for product in os.listdir(data_path):
         path = os.path.join(data_path, product)
-        if os.path.exists(os.path.join(path, 'info.json')) is False:
+        product_title = get_product_title(path)
+        if product_title is None:
             continue
-        with open(os.path.join(path, 'info.json'), "r") as f:
-            product_info = json.load(f)
-        warp_matrix = align_info["warp_matrices"].get(product_info["title"])
+        warp_matrix = align_info["warp_matrices"].get(product_title)
         if warp_matrix is not None:
             print('Aligning {}...'.format(path))
             warp_matrix = np.array(warp_matrix, dtype=np.float32)
@@ -192,4 +205,4 @@ def align_data(data_path, aligned_data_path,
 
 if __name__ == '__main__':
     args = parse_arguments()
-    align_data(args.data, args.output)
+    align_data(args.data, args.output, args.align_info)

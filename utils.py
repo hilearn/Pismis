@@ -40,6 +40,34 @@ class Bands(enum.Enum):
     B12 = 'B12'
 
 
+def get_product_title(path):
+    """
+    Reads product title from path/info.json and returns.
+    :param path: str, product path.
+    :return: str, product title, if found.
+    """
+    if os.path.exists(os.path.join(path, 'info.json')) is False:
+        return None
+    with open(os.path.join(path, 'info.json'), 'r') as f:
+        info = json.load(f)
+    return info.get('title', )
+
+
+def find_product(directory, product_title):
+    """
+    Find product in the given directory with given title and return it's path.
+    :param directory: str, path to products.
+    :param product_title: str, product title name.
+    :return: str, path of product corresponding to given product_title if
+        found, otherwise returns None
+    """
+    for product in os.listdir(directory):
+        path = os.path.join(directory, product)
+        if get_product_title(path) == product_title:
+            return path
+    return None
+
+
 def resize_band(image, size):
     """
     Returns a resized copy of image.
