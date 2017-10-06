@@ -124,37 +124,41 @@ def index_tensor(path, size=None):
                       size).astype('float32')
     B11 = resize_band(gdal.Open(band_name(path, Bands.B11)).ReadAsArray(),
                       size).astype('float32')
-    B12 = resize_band(gdal.Open(band_name(path, Bands.B12)).ReadAsArray(),
-                      size).astype('float32')
+    # B12 = resize_band(gdal.Open(band_name(path, Bands.B12)).ReadAsArray(),
+    #                  size).astype('float32')
+    # All indices take two classes corresponding to ground and forest
+    # all indices are written such that obtained class distribution with
+    # greater mean value corresponds to forest
     index = [
         # NDVI
         (B08 - B04) / (B08 + B04),
         # SR
         # B08 / B04,
         # MSI
-        (B11 / B08),
+        -(B11 / B08),
         # NDVI705
         (B06 - B05) / (B06 + B05),
         # SAVI
-        1.5 * (B08 - B04) / (B08 + B04 + 0.5),
+        # 1.5 * (B08 - B04) / (B08 + B04 + 0.5),
         # PSRI-NIR
         # (B04 - B02) / B08,
         # PSRI
-        (B04 - B02) / B05,
+        -(B04 - B02) / B05,
         # NBR-RAW
-        (B08 - B12) / (B08 + B12),
+        # (B08 - B12) / (B08 + B12),
         # MSAVI2
-        (B08 + 1) - 0.5 * np.sqrt((2 * B08 - 1) ** 2 + 8 * B04),
+        # (B08 + 1) - 0.5 * np.sqrt((2 * B08 - 1) ** 2 + 8 * B04),
         # LAI-SAVI
-        -np.log(0.371 + 1.5 * (B08 - B04) / (B08 + B04 + 0.5)) / 2.4,
+        # -np.log(0.371 + 1.5 * (B08 - B04) / (B08 + B04 + 0.5)) / 2.4,
         # GRVI1
-        (B04 - B03) / (B04 + B03),
+        -(B04 - B03) / (B04 + B03),
         # GNDVI
-        (B08 - B03) / (B08 + B03),
+        # (B08 - B03) / (B08 + B03),
         # EVI2
         # 2.5 * (B08 - B04) / (B08 + 2.4 * B04 + 1),
         # NDMI
-        (B08 - B11) / (B11 + B08)]
+        # (B08 - B11) / (B11 + B08)
+    ]
     return np.stack(index, axis=-1)
 
 
