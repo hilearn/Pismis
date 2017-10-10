@@ -40,14 +40,14 @@ def multi_normal_pdf(x, mean, covariance):
 
 
 def forest_probability(index, mask=None, predict_index=None,
-                       missing_values=np.NaN):
+                       missing_values=np.NaN, clusters_number=3):
     """
     Estimates forest probability for each pixel using Gaussian Mixture model.
-    :param ndvi: array, ndvi values for each pixel
+    :param index: array, ndvi values for each pixel
     :param mask: array of ones and zeros.
         uses pixel information, if mask is one for that pixel.
     :param missing_values: float. set this value for pixels with zero mask.
-    :param predict_ndvi: array, If given predict probabilities for this array.
+    :param predict_index: array, If given predict probabilities for this array.
     :return: (array, dict),
         probability of being forest for avery pixel and some information about
         modeled distribution (i.e. means, weights, variances)
@@ -60,19 +60,17 @@ def forest_probability(index, mask=None, predict_index=None,
     if predict_index is None:
         predict_index = index
 
-    gmm = mixture.GaussianMixture(2)
+    gmm = mixture.GaussianMixture(clusters_number)
     # TODO: mask should be used here
     gmm.fit(index.reshape(-1, index.shape[-1]))
     pixel_cluster_proba = gmm.predict_proba(predict_index.reshape(
-        -1, index.shape[-1])).reshape(*index.shape[:2], 2)
+        -1, index.shape[-1])).reshape(*index.shape[:2], clusters_number)
 
     covariances = gmm.covariances_[:]
     weights = gmm.weights_.copy()
     means = gmm.means_.copy()
 
-    P = pixel_cluster_proba[..., 1]
-    if means[0, 0] > means[1, 0]:
-        P = pixel_cluster_proba[..., 0]
+    P = pixel_cluster_proba[..., weights.argmax()]
 
     P[mask == 0] = missing_values
     return P, {
