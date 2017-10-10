@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt
 from utils import Bands
 from utils import band_name
 from utils import resize_band
+from utils import read_array
 
 
 def parse_args():
@@ -94,7 +95,7 @@ def save_color_image(directory, r_band, g_band, b_band, suffix='TCI1',
         if file is None:
             raise Exception('"{}" band not found in {}.'.
                             format(channel_names[c].value, directory))
-        channels[c] = gdal.Open(file).ReadAsArray()
+        channels[c] = read_array(file)
 
     red_channel, green_channel, blue_channel = channels
     dataset = gdal.Open(file)
@@ -142,9 +143,7 @@ def main(args):
     colored_image_name = band_name(args.product, Bands.TCI, extension='.jp2')
     if colored_image_name is not None:
         print("There is colored image")
-        image_to_transpose = gdal.Open(colored_image_name).ReadAsArray()
-        image = np.array(image_to_transpose).transpose(1, 2, 0)
-
+        image = read_array(colored_image_name).transpose(1, 2, 0)
     else:
         print("There isn't colored image. Try mix...\n")
         image = save_color_image(args.product, Bands.RED,

@@ -10,7 +10,7 @@ You can also save "cloud_mask.pkl" file in the same directory alongside bands.
 """
 from utils import band_name
 from utils import Bands
-from osgeo import gdal
+from utils import read_array
 import pickle as pkl
 
 
@@ -31,9 +31,9 @@ def cloud_mask(bands_directory, cloud_threshold=1500,
     green_band_name = band_name(bands_directory, Bands.GREEN)
     blue_band_name = band_name(bands_directory, Bands.BLUE)
 
-    red_band = gdal.Open(red_band_name).ReadAsArray()
-    green_band = gdal.Open(green_band_name).ReadAsArray()
-    blue_band = gdal.Open(blue_band_name).ReadAsArray()
+    red_band = read_array(red_band_name)
+    green_band = read_array(green_band_name)
+    blue_band = read_array(blue_band_name)
 
     cloud_mask = ((red_band > cloud_threshold) * (green_band > cloud_threshold)
                   * (blue_band > cloud_threshold))

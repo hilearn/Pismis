@@ -40,6 +40,15 @@ class Bands(enum.Enum):
     B12 = 'B12'
 
 
+def read_array(path):
+    """
+    Read image array with gdal
+    :param path: str, path to image
+    :return: array
+    """
+    return gdal.Open(path).ReadAsArray()
+
+
 def get_product_title(path):
     """
     Reads product title from path/info.json and returns.

@@ -1,15 +1,12 @@
-import pandas as pd
 from matplotlib import pyplot as plt
-from datetime import datetime
-import ast
-from argparse import ArgumentParser
-from osgeo import gdal
-import os
-import numpy as np
 from matplotlib.colors import LogNorm
-import matplotlib
-
-matplotlib.rcParams.update({'font.size': 30})
+from argparse import ArgumentParser
+from datetime import datetime
+from utils import read_array
+import pandas as pd
+import numpy as np
+import ast
+import os
 
 
 def parse_arguments():
@@ -17,6 +14,8 @@ def parse_arguments():
     parser.add_argument('probabilities', help='csv or pickle file of porest'
                                               ' probabilities.')
     parser.add_argument('--image', help='sample image', required=True)
+    parser.add_argument('--save-plots', default=None,
+                        help='directory to save plotted images')
     return parser.parse_args()
 
 
@@ -39,28 +38,28 @@ def plot_deforestation_ponts(df, image, save_dir=None, show=False, c=0.6,
 
     s2016 = df[(df.index > start2016) & (df.index < end2016)].mean(axis=0)
     s2017 = df[(df.index > start2017) & (df.index < end2017)].mean(axis=0)
-    ss = pd.DataFrame([s2016, s2017], index=[2016, 2017]).T.dropna()
-    prob_mask = ss[2016] - ss[2016] * ss[2017]
+    ss = pd.DataFrame([s2016, s2017], index=[2016, 2017]).T
+    prob_mask = ss[2016] * (1 - ss[2017])
 
-    deforestation_points = ss.index[
-        (prob_mask > c)]
+    deforestation_points = ss.dropna().index[(prob_mask.dropna() > c)]
 
     print('Points: {}'.format(len(deforestation_points)))
 
-    image = gdal.Open(image).ReadAsArray().transpose(1, 2, 0)
+    image = read_array(image).transpose(1, 2, 0)
 
     if plot:
-        pred = (prob_mask).values.reshape(image.shape[0], image.shape[1])
+        pred = prob_mask.values.reshape(image.shape[0], image.shape[1])
 
-        # PLOT PROBABILITY MASK************************************************
-        plt.figure(figsize=(30, 10), dpi=200)
+        # plot probability mask
+        plt.figure(figsize=(10, 4.1))
         plt.subplot(122)
         plt.axis("off")
 
         plt.imshow(image)
         plt.scatter([y for x, y in deforestation_points],
-                    [x for x, y in deforestation_points], s=1, c="Orange")
-        plt.suptitle("Deforestation Probability")
+                    [x for x, y in deforestation_points], s=0.5, c="Orange",
+                    lw=0)
+        plt.suptitle("Deforestation Probability", fontsize=20)
 
         plt.subplot(121)
         plt.axis("off")
@@ -68,26 +67,26 @@ def plot_deforestation_ponts(df, image, save_dir=None, show=False, c=0.6,
         plt.colorbar(fraction=0.037, pad=0.04)
         if save_dir is not None:
             plt.savefig(os.path.join(save_dir, "deforestatin.png"),
-                        bbox_inches='tight')
+                        bbox_inches='tight', dpi=300)
 
-        # PLOT FOREST PROBABILITIES********************************************
-        plt.figure(figsize=(20, 10), dpi=200)
+        # plot forest probabilities
+        plt.figure(figsize=(10, 4.5))
         y = np.linspace(0, 1 - c, 100)
         x = c / (1 - y)
         plt.subplot(121)
         plt.margins(0)
         plt.plot(x, y, color="red")
-        plt.scatter(ss[2016], ss[2017], s=0.1)
-        plt.suptitle("Forest Probabilities of pixels")
+        plt.scatter(ss[2016], ss[2017], s=1.5, lw=0, alpha=0.8)
+        plt.suptitle("Forest Probabilities of pixels", fontsize=20)
 
         plt.subplot(122)
         plt.axis("off")
-        plt.hist2d(ss[2016], ss[2017], norm=LogNorm(), bins=12)
+        plt.hist2d(ss.dropna()[2016], ss.dropna()[2017], norm=LogNorm(),
+                   bins=12)
         plt.colorbar(fraction=0.037, pad=0.04)
-
         if save_dir is not None:
             plt.savefig(os.path.join(save_dir, "scatter.png"),
-                        bbox_inches='tight')
+                        bbox_inches='tight', dpi=300)
 
         if show:
             plt.show()
@@ -106,5 +105,5 @@ if __name__ == '__main__':
     else:
         df = pd.read_pickle(args.probabilities)
 
-    plot_deforestation_ponts(df, args.image)
+    plot_deforestation_ponts(df, args.image, save_dir=args.save_plots)
     plt.show()
